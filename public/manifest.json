@@ -1,0 +1,53 @@
+{
+  "short_name": "SportClub",
+  "name": "SportClub Manager - Gestionale Società Sportive",
+  "description": "Gestisci la tua società sportiva: atleti, calendari, documenti e comunicazioni",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "orientation": "portrait-primary",
+  "categories": ["sports", "productivity", "business"],
+  "lang": "it",
+  "scope": "/",
+  "shortcuts": [
+    {
+      "name": "Calendario",
+      "short_name": "Calendario",
+      "description": "Visualizza il calendario degli eventi",
+      "url": "/calendar",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Atleti",
+      "short_name": "Atleti",
+      "description": "Gestisci gli atleti",
+      "url": "/athletes",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Notifiche",
+      "short_name": "Notifiche",
+      "description": "Controlla le notifiche",
+      "url": "/notifications",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    }
+  ]
+}
