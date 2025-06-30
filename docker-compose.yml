@@ -4,307 +4,80 @@ services:
   # Database PostgreSQL
   postgres:
     image: postgres:15-alpine
-    container_name: sportclub-postgres
+    container_name: sportclub-postgres-dev
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-sportclub_manager}
       POSTGRES_USER: ${DB_USER:-sportclub_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     ports:
       - "5432:5432"
-    networks:
-      - sportclub_network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sportclub_user} -d ${DB_NAME:-sportclub_manager}"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Redis per cache e sessioni
-  redis:
-    image: redis:7-alpine
-    container_name: sportclub-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-sportclub_redis_pass}
-    volumes:
-      - redis_data:/data
-    ports:
-      - "6379:6379"
-    networks:
-      - sportclub_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Applicazione SportClub Manager
-  app:
+  # Applicazione SportClub (Frontend + Backend)
+  # Backend API
+  backend:
     build:
       context: .
       dockerfile: Dockerfile
-      target: backend
-    container_name: sportclub-app
+      target: development
+    container_name: sportclub-backend-dev
     restart: unless-stopped
     environment:
-      # Database
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-sportclub_manager}
       DB_USER: ${DB_USER:-sportclub_user}
-      DB_PASSWORD: ${DB_PASSWORD}
-
-      # Redis
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-sportclub_redis_pass}
-
-      # App configuration
-      NODE_ENV: production
-      PORT: 5000
-      JWT_SECRET: ${JWT_SECRET}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-
-      # External URLs
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
-
-      # Email configuration
-      EMAIL_HOST: ${EMAIL_HOST}
-      EMAIL_PORT: ${EMAIL_PORT:-587}
-      EMAIL_USER: ${EMAIL_USER}
-      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
-
-      # Push notifications
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
-
-      # Monitoring
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      LOG_QUERIES: ${LOG_QUERIES:-false}
-    volumes:
-      - app_uploads:/app/server/uploads
-      - app_logs:/app/logs
-    ports:
-      - "5000:5000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - sportclub_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # Nginx reverse proxy
-  nginx:
-    image: nginx:alpine
-    container_name: sportclub-nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/sites/:/etc/nginx/conf.d/:ro
-      - ./ssl:/etc/nginx/ssl:ro
-      - nginx_logs:/var/log/nginx
-    depends_on:
-      - app
-    networks:
-      - sportclub_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Backup service
-  backup:
-    image: postgres:15-alpine
-    container_name: sportclub-backup
-    restart: "no"
-    environment:
-      PGHOST: postgres
-      PGDATABASE: ${DB_NAME:-sportclub_manager}
-      PGUSER: ${DB_USER:-sportclub_user}
-      PGPASSWORD: ${DB_PASSWORD}
-    volumes:
-      - ./backups:/backups
-      - ./scripts/backup.sh:/backup.sh:ro
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - sportclub_network
-    command: /bin/sh -c "chmod +x /backup.sh && /backup.sh"
-    profiles:
-      - backup
-
-  # Monitoring con Prometheus (opzionale)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: sportclub-prometheus
-    restart: unless-stopped
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-    networks:
-      - sportclub_network
-    profiles:
-      - monitoring
-
-  # Grafana per dashboard (opzionale)
-  grafana:
-    image: grafana/grafana:latest
-    container_name: sportclub-grafana
-    restart: unless-stopped
-    ports:
-      - "3001:3000"
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
-    depends_on:
-      - prometheus
-    networks:
-      - sportclub_network
-    profiles:
-      - monitoring
-
-# Volumi persistenti
-volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-  app_uploads:
-    driver: local
-  app_logs:
-    driver: local
-  nginx_logs:
-    driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
-
-# Rete personalizzata
-networks:
-  sportclub_network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-
-# ===============================================
-# Configurazioni per ambienti diversi
-# ===============================================
-
----
-# docker-compose.override.yml per development
-version: '3.8'
-
-services:
-  app:
-    build:
-      target: development
-    environment:
+      DB_PASSWORD: ${DB_PASSWORD:-password123}
       NODE_ENV: development
+      PORT: 5001
+      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_key_minimum_32_characters_long}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-your_google_client_id}
+      FRONTEND_URL: http://localhost:3000
       LOG_LEVEL: debug
       LOG_QUERIES: true
     volumes:
       - .:/app
       - /app/node_modules
+      - app_uploads:/app/server/uploads
     ports:
-      - "3000:3000"  # React dev server
-      - "5000:5000"  # Express server
-    command: npm run dev
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: npm run server
 
-  # Hot reload per sviluppo
-  postgres:
-    ports:
-      - "5433:5432"  # Porta diversa per evitare conflitti
-
----
-# docker-compose.prod.yml per produzione
-version: '3.8'
-
-services:
-  app:
-    deploy:
-      replicas: 3
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
-
-  nginx:
-    deploy:
-      replicas: 2
-      restart_policy:
-        condition: on-failure
-
-  postgres:
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: on-failure
-      resources:
-        limits:
-          memory: 1G
-          cpus: '1.0'
-
----
-# docker-compose.test.yml per testing
-version: '3.8'
-
-services:
-  test:
+  # Frontend React
+  frontend:
     build:
       context: .
-      target: testing
+      dockerfile: Dockerfile
+      target: development
+    container_name: sportclub-frontend-dev
+    restart: unless-stopped
     environment:
-      NODE_ENV: test
-      DB_HOST: postgres
-      DB_NAME: sportclub_test
-      DB_USER: test_user
-      DB_PASSWORD: test_password
+      REACT_APP_API_URL: http://localhost:5001/api
+      GENERATE_SOURCEMAP: false
+    volumes:
+      - .:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
     depends_on:
-      - postgres
-    networks:
-      - sportclub_network
-    command: npm run test:ci
+      - backend
+    command: npm start
 
-  postgres:
-    environment:
-      POSTGRES_DB: sportclub_test
-      POSTGRES_USER: test_user
-      POSTGRES_PASSWORD: test_password
+# Volumi persistenti
+volumes:
+  postgres_data:
+    driver: local
+  app_uploads:
+    driver: local
