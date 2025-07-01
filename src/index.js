@@ -118,7 +118,7 @@ if ('serviceWorker' in navigator) {
         console.log('🔄 Nuovo service worker attivo');
 
         // Opzionalmente, ricarica la pagina o mostra una notifica
-        if (confirm('È disponibile una nuova versione dell\'app. Vuoi ricaricare?')) {
+        if (window.confirm('È disponibile una nuova versione dell\'app. Vuoi ricaricare?')) {
             window.location.reload();
         }
     });

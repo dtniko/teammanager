@@ -216,7 +216,6 @@ module.exports = {
         }),
         require('@tailwindcss/typography'),
         require('@tailwindcss/aspect-ratio'),
-        require('@tailwindcss/line-clamp'),
 
         // Plugin personalizzato per utilità aggiuntive
         function({ addUtilities, addComponents, theme }) {

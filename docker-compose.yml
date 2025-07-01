@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Database PostgreSQL
   postgres:
@@ -38,7 +36,7 @@ services:
       DB_USER: ${DB_USER:-sportclub_user}
       DB_PASSWORD: ${DB_PASSWORD:-password123}
       NODE_ENV: development
-      PORT: 5001
+      PORT: 8000
       JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_key_minimum_32_characters_long}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-your_google_client_id}
       FRONTEND_URL: http://localhost:3000
@@ -49,7 +47,7 @@ services:
       - /app/node_modules
       - app_uploads:/app/server/uploads
     ports:
-      - "5001:5001"
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,7 +62,7 @@ services:
     container_name: sportclub-frontend-dev
     restart: unless-stopped
     environment:
-      REACT_APP_API_URL: http://localhost:5001/api
+      REACT_APP_API_URL: http://localhost:8000/api
       GENERATE_SOURCEMAP: false
     volumes:
       - .:/app
