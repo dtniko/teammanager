@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+// eslint-disable-next-line no-unused-vars
 import {
     ArrowLeft,
     Edit,
@@ -40,13 +41,13 @@ const AthleteDetail = () => {
 
     useEffect(() => {
         loadAthleteData();
-    }, [athleteId]);
+    }, [athleteId, loadAthleteData]);
 
     useEffect(() => {
         if (activeTab === 'documents') {
             loadDocuments();
         }
-    }, [activeTab, athleteId]);
+    }, [activeTab, athleteId, loadAthleteData]);
 
     const loadAthleteData = async () => {
         try {
