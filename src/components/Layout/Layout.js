@@ -25,7 +25,7 @@ const Layout = ({ user, onLogout, children }) => {
     const location = useLocation();
     const { unreadCount } = useNotifications();
 
-    // Configurazione menu di navigazione riorganizzato
+    // Configurazione menu di navigazione nell'ORDINE CORRETTO
     const navigationItems = [
         {
             name: 'Dashboard',
@@ -116,7 +116,7 @@ const Layout = ({ user, onLogout, children }) => {
         fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-                <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
+                <div className="flex items-center justify-between h-20 px-4 border-b border-gray-200">
                     <div className="flex items-center">
                         <div className="flex-shrink-0">
                             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -197,8 +197,8 @@ const Layout = ({ user, onLogout, children }) => {
             {/* Main Content */}
             <div className="lg:pl-64 flex flex-col min-h-screen">
                 {/* Top Navigation */}
-                <header className="bg-white shadow-sm border-b border-gray-200">
-                    <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
+                <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
+                    <div className="flex items-center justify-between h-20 px-4 sm:px-6 lg:px-8">
                         {/* Mobile menu button */}
                         <button
                             onClick={() => setSidebarOpen(true)}
