@@ -105,7 +105,6 @@ const Layout = ({ user, onLogout, children }) => {
     };
 
     const sidebarWidth = sidebarCollapsed ? 'w-16' : 'w-64';
-    const contentMargin = sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64';
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -120,8 +119,8 @@ const Layout = ({ user, onLogout, children }) => {
             {/* Sidebar */}
             <div className={`
                 fixed inset-y-0 left-0 z-50 ${sidebarWidth} bg-white shadow-lg transform transition-all duration-300 ease-in-out 
-                lg:translate-x-0 lg:static lg:inset-0
-                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                lg:translate-x-0
+                ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
             `}>
                 {/* Header Sidebar */}
                 <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
@@ -257,109 +256,107 @@ const Layout = ({ user, onLogout, children }) => {
             </div>
 
             {/* Main Content Area */}
-            <div className={`min-h-screen transition-all duration-300 ${contentMargin}`}>
-                {/* Top Navigation */}
-                <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-                    <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
-                        {/* Mobile menu button */}
-                        <button
-                            onClick={() => setSidebarOpen(true)}
-                            className="lg:hidden p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
-                        >
-                            <Menu className="h-6 w-6" />
-                        </button>
+            <div className={`transition-all duration-300 ${sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
+                {/* Top Navigation - HEADER GLOBALE */}
+                <header className="bg-white shadow-sm border-b border-gray-200 h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 sticky top-0 z-30">
+                    {/* Mobile menu button */}
+                    <button
+                        onClick={() => setSidebarOpen(true)}
+                        className="lg:hidden p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+                    >
+                        <Menu className="h-6 w-6" />
+                    </button>
 
-                        {/* Page title for mobile */}
-                        <div className="flex-1 lg:flex-none">
-                            <h2 className="text-lg font-semibold text-gray-900 lg:hidden">
-                                SportClub Manager
-                            </h2>
+                    {/* Page title for mobile */}
+                    <div className="flex-1 lg:flex-none">
+                        <h2 className="text-lg font-semibold text-gray-900 lg:hidden">
+                            SportClub Manager
+                        </h2>
+                    </div>
+
+                    {/* Right side actions */}
+                    <div className="flex items-center space-x-3">
+                        {/* Notifications */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                                className="p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-gray-100 relative transition-colors"
+                            >
+                                <Bell className="h-6 w-6" />
+                                {unreadCount > 0 && (
+                                    <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                                        {unreadCount > 9 ? '9+' : unreadCount}
+                                    </span>
+                                )}
+                            </button>
+
+                            {notificationsOpen && (
+                                <NotificationDropdown onClose={() => setNotificationsOpen(false)} />
+                            )}
                         </div>
 
-                        {/* Right side actions */}
-                        <div className="flex items-center space-x-3">
-                            {/* Notifications */}
-                            <div className="relative">
-                                <button
-                                    onClick={() => setNotificationsOpen(!notificationsOpen)}
-                                    className="p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-gray-100 relative transition-colors"
-                                >
-                                    <Bell className="h-6 w-6" />
-                                    {unreadCount > 0 && (
-                                        <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                                            {unreadCount > 9 ? '9+' : unreadCount}
+                        {/* User menu */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                                className="flex items-center space-x-2 p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
+                            >
+                                {user.avatarUrl ? (
+                                    <img
+                                        src={user.avatarUrl}
+                                        alt={`${user.firstName} ${user.lastName}`}
+                                        className="w-8 h-8 rounded-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center">
+                                        <span className="text-white font-medium text-xs">
+                                            {user.firstName?.[0]}{user.lastName?.[0]}
                                         </span>
-                                    )}
-                                </button>
-
-                                {notificationsOpen && (
-                                    <NotificationDropdown onClose={() => setNotificationsOpen(false)} />
-                                )}
-                            </div>
-
-                            {/* User menu */}
-                            <div className="relative">
-                                <button
-                                    onClick={() => setUserMenuOpen(!userMenuOpen)}
-                                    className="flex items-center space-x-2 p-2 rounded-lg text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors"
-                                >
-                                    {user.avatarUrl ? (
-                                        <img
-                                            src={user.avatarUrl}
-                                            alt={`${user.firstName} ${user.lastName}`}
-                                            className="w-8 h-8 rounded-full object-cover"
-                                        />
-                                    ) : (
-                                        <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center">
-                                            <span className="text-white font-medium text-xs">
-                                                {user.firstName?.[0]}{user.lastName?.[0]}
-                                            </span>
-                                        </div>
-                                    )}
-                                    <ChevronDown className="h-4 w-4" />
-                                </button>
-
-                                {/* User dropdown menu */}
-                                {userMenuOpen && (
-                                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg py-1 z-50 border border-gray-200">
-                                        <div className="px-4 py-3 border-b border-gray-100">
-                                            <p className="text-sm font-medium text-gray-900 truncate">
-                                                {user.firstName} {user.lastName}
-                                            </p>
-                                            <p className="text-sm text-gray-500 truncate">{user.email}</p>
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-2 ${getRoleBadgeColor(user.role)}`}>
-                                                {getRoleLabel(user.role)}
-                                            </span>
-                                        </div>
-
-                                        <Link
-                                            to="/profile"
-                                            onClick={() => setUserMenuOpen(false)}
-                                            className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                                        >
-                                            <Settings className="mr-3 h-4 w-4" />
-                                            Profilo e Impostazioni
-                                        </Link>
-
-                                        <button
-                                            onClick={() => {
-                                                setUserMenuOpen(false);
-                                                onLogout();
-                                            }}
-                                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                                        >
-                                            <LogOut className="mr-3 h-4 w-4" />
-                                            Disconnetti
-                                        </button>
                                     </div>
                                 )}
-                            </div>
+                                <ChevronDown className="h-4 w-4" />
+                            </button>
+
+                            {/* User dropdown menu */}
+                            {userMenuOpen && (
+                                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg py-1 z-50 border border-gray-200">
+                                    <div className="px-4 py-3 border-b border-gray-100">
+                                        <p className="text-sm font-medium text-gray-900 truncate">
+                                            {user.firstName} {user.lastName}
+                                        </p>
+                                        <p className="text-sm text-gray-500 truncate">{user.email}</p>
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium mt-2 ${getRoleBadgeColor(user.role)}`}>
+                                            {getRoleLabel(user.role)}
+                                        </span>
+                                    </div>
+
+                                    <Link
+                                        to="/profile"
+                                        onClick={() => setUserMenuOpen(false)}
+                                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                                    >
+                                        <Settings className="mr-3 h-4 w-4" />
+                                        Profilo e Impostazioni
+                                    </Link>
+
+                                    <button
+                                        onClick={() => {
+                                            setUserMenuOpen(false);
+                                            onLogout();
+                                        }}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                                    >
+                                        <LogOut className="mr-3 h-4 w-4" />
+                                        Disconnetti
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </header>
 
                 {/* Page Content */}
-                <main className="flex-1 min-h-screen bg-gray-50">
+                <main className="min-h-[calc(100vh-4rem)] bg-gray-50">
                     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
                         {children}
                     </div>
