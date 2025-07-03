@@ -29,7 +29,7 @@ services:
       DB_NAME: ${DB_NAME:-sportclub_manager}
       DB_USER: ${DB_USER:-sportclub_user}
       DB_PASSWORD: ${DB_PASSWORD:-password}
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 5000
       JWT_SECRET: ${JWT_SECRET:-your_super_secure_jwt_secret_key_minimum_32_characters_long}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-your_google_client_id}
