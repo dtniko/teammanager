@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
@@ -30,10 +31,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Public routes
+// API Routes
 app.use('/api/auth', authRoutes);
-
-// Protected routes
 app.use('/api/users', authenticateToken, userRoutes);
 app.use('/api/athletes', authenticateToken, athleteRoutes);
 app.use('/api/groups', authenticateToken, groupRoutes);
@@ -47,12 +46,31 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Serve React app
-app.use(express.static(path.join(__dirname, '../build')));
+// Controlla se esiste la cartella build
+const buildPath = path.join(__dirname, '../build');
+console.log('🔍 Checking build path:', buildPath);
+console.log('📁 Build exists:', fs.existsSync(buildPath));
 
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../build', 'index.html'));
-});
+if (fs.existsSync(buildPath)) {
+    console.log('✅ Serving React build from:', buildPath);
+    // Serve static files from React build
+    app.use(express.static(buildPath));
+
+    // Catch all handler: send back React's index.html file for any non-API routes
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(buildPath, 'index.html'));
+    });
+} else {
+    console.log('❌ Build folder not found');
+    // Fallback se non c'è build
+    app.get('*', (req, res) => {
+        res.json({
+            error: 'Build not found',
+            buildPath: buildPath,
+            currentDir: __dirname
+        });
+    });
+}
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -68,7 +86,6 @@ const startServer = async () => {
     try {
         await initializeDatabase();
 
-        // Inizializza il servizio di scheduling
         if (process.env.NODE_ENV !== 'test') {
             schedulerService.initialize();
         }

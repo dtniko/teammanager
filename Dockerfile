@@ -25,5 +25,5 @@ RUN mkdir -p /app/server/uploads /app/logs
 # Espone la porta
 EXPOSE 5000
 
-# Comando per avviare solo il server (non npm run dev)
+# Avvia SOLO il server Express (non React dev server)
 CMD ["node", "server/index.js"]

@@ -38,12 +38,13 @@ services:
       - .:/app
       - /app/node_modules
     ports:
-      - "8000:5000"  # Mappa porta 8000 del host alla 5000 del container
+      - "8000:5000"
     depends_on:
       - postgres
     networks:
       - sportclub_network
-    command: npm run dev
+    # RIMUOVI questa riga che sovrascrive il CMD del Dockerfile
+    # command: npm run dev
 
 volumes:
   postgres_data:
