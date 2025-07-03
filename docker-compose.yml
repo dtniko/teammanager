@@ -2,80 +2,52 @@ services:
   # Database PostgreSQL
   postgres:
     image: postgres:15-alpine
-    container_name: sportclub-postgres-dev
+    container_name: sportclub-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${DB_NAME:-sportclub_manager}
       POSTGRES_USER: ${DB_USER:-sportclub_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
-      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     ports:
       - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sportclub_user} -d ${DB_NAME:-sportclub_manager}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    networks:
+      - sportclub_network
 
-  # Applicazione SportClub (Frontend + Backend)
-  # Backend API
-  backend:
+  # Applicazione SportClub Manager
+  app:
     build:
       context: .
       dockerfile: Dockerfile
       target: development
-    container_name: sportclub-backend-dev
+    container_name: sportclub-app
     restart: unless-stopped
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-sportclub_manager}
       DB_USER: ${DB_USER:-sportclub_user}
-      DB_PASSWORD: ${DB_PASSWORD:-password123}
+      DB_PASSWORD: ${DB_PASSWORD:-password}
       NODE_ENV: development
-      PORT: 8000
-      JWT_SECRET: ${JWT_SECRET:-dev_jwt_secret_key_minimum_32_characters_long}
+      PORT: 5000
+      JWT_SECRET: ${JWT_SECRET:-your_super_secure_jwt_secret_key_minimum_32_characters_long}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-your_google_client_id}
-      FRONTEND_URL: http://localhost:3000
-      LOG_LEVEL: debug
-      LOG_QUERIES: true
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - app_uploads:/app/server/uploads
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: npm run server
-
-  # Frontend React
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: development
-    container_name: sportclub-frontend-dev
-    restart: unless-stopped
-    environment:
-      REACT_APP_API_URL: http://localhost:8000/api
-      GENERATE_SOURCEMAP: false
+      FRONTEND_URL: http://localhost:8000
     volumes:
       - .:/app
       - /app/node_modules
     ports:
-      - "3000:3000"
+      - "8000:5000"  # Mappa porta 8000 del host alla 5000 del container
     depends_on:
-      - backend
-    command: npm start
+      - postgres
+    networks:
+      - sportclub_network
+    command: npm run dev
 
-# Volumi persistenti
 volumes:
   postgres_data:
-    driver: local
-  app_uploads:
-    driver: local
+
+networks:
+  sportclub_network:
+    driver: bridge
