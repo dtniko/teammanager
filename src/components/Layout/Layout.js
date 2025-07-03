@@ -256,8 +256,8 @@ const Layout = ({ user, onLogout, children }) => {
                 </div>
             </div>
 
-            {/* Main Content */}
-            <div className={`${contentMargin} flex flex-col min-h-screen transition-all duration-300`}>
+            {/* Main Content Area */}
+            <div className={`min-h-screen transition-all duration-300 ${contentMargin}`}>
                 {/* Top Navigation */}
                 <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
                     <div className="flex items-center justify-between h-16 px-4 sm:px-6 lg:px-8">
@@ -359,7 +359,7 @@ const Layout = ({ user, onLogout, children }) => {
                 </header>
 
                 {/* Page Content */}
-                <main className="flex-1 overflow-y-auto bg-gray-50">
+                <main className="flex-1 min-h-screen bg-gray-50">
                     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
                         {children}
                     </div>
