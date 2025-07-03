@@ -11,7 +11,10 @@ import {
     TrendingUp,
     Plus,
     Eye,
-    ArrowRight
+    ArrowRight,
+    Activity,
+    Target,
+    Award
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
@@ -106,11 +109,11 @@ const Dashboard = () => {
 
     const getEventTypeColor = (eventType) => {
         const colors = {
-            training: 'bg-blue-100 text-blue-800',
-            match: 'bg-red-100 text-red-800',
-            meeting: 'bg-yellow-100 text-yellow-800'
+            training: 'bg-blue-100 text-blue-800 border-blue-200',
+            match: 'bg-red-100 text-red-800 border-red-200',
+            meeting: 'bg-yellow-100 text-yellow-800 border-yellow-200'
         };
-        return colors[eventType] || 'bg-gray-100 text-gray-800';
+        return colors[eventType] || 'bg-gray-100 text-gray-800 border-gray-200';
     };
 
     const getEventTypeLabel = (eventType) => {
@@ -143,9 +146,35 @@ const Dashboard = () => {
         return colors[urgencyLevel] || 'bg-gray-100 text-gray-800 border-gray-200';
     };
 
+    // Componente per le statistiche card
+    const StatCard = ({ icon: Icon, label, value, color = "blue", trend = null, onClick = null }) => (
+        <div
+            className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200 ${onClick ? 'cursor-pointer' : ''}`}
+            onClick={onClick}
+        >
+            <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                    <div className={`p-3 rounded-xl bg-${color}-100`}>
+                        <Icon className={`h-6 w-6 text-${color}-600`} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-gray-600">{label}</p>
+                        <p className="text-2xl font-bold text-gray-900">{value}</p>
+                        {trend && (
+                            <p className={`text-sm ${trend.positive ? 'text-green-600' : 'text-red-600'} flex items-center mt-1`}>
+                                <TrendingUp className={`h-3 w-3 mr-1 ${trend.positive ? '' : 'rotate-180'}`} />
+                                {trend.value}
+                            </p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
     if (loading) {
         return (
-            <div className="space-y-6">
+            <div className="space-y-8">
                 <div className="flex items-center justify-between">
                     <CardSkeleton className="h-8 w-64" />
                 </div>
@@ -154,7 +183,7 @@ const Dashboard = () => {
                         <CardSkeleton key={i} />
                     ))}
                 </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <CardSkeleton />
                     <CardSkeleton />
                 </div>
@@ -163,106 +192,100 @@ const Dashboard = () => {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
                         Ciao, {user.firstName}! 👋
                     </h1>
-                    <p className="text-gray-600 mt-1">
+                    <p className="text-gray-600">
                         Ecco un riepilogo delle tue attività oggi
                     </p>
                 </div>
-                <div className="text-sm text-gray-500">
-                    {format(new Date(), 'EEEE d MMMM yyyy', { locale: it })}
+                <div className="mt-4 sm:mt-0">
+                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                        <div className="flex items-center space-x-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span>Sistema Online</span>
+                        </div>
+                        <span className="text-gray-300">|</span>
+                        <span>{format(new Date(), 'EEEE d MMMM yyyy', { locale: it })}</span>
+                    </div>
                 </div>
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {/* Notifiche non lette */}
-                <div className="bg-white rounded-lg shadow p-6">
-                    <div className="flex items-center">
-                        <div className="p-2 bg-red-100 rounded-lg">
-                            <MessageSquare className="h-6 w-6 text-red-600" />
-                        </div>
-                        <div className="ml-4">
-                            <p className="text-sm font-medium text-gray-600">Notifiche</p>
-                            <p className="text-2xl font-bold text-gray-900">{unreadCount}</p>
-                        </div>
-                    </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard
+                    icon={MessageSquare}
+                    label="Notifiche"
+                    value={unreadCount}
+                    color="red"
+                    onClick={() => window.location.href = '/notifications'}
+                />
 
-                {/* Eventi prossimi */}
-                <div className="bg-white rounded-lg shadow p-6">
-                    <div className="flex items-center">
-                        <div className="p-2 bg-blue-100 rounded-lg">
-                            <Calendar className="h-6 w-6 text-blue-600" />
-                        </div>
-                        <div className="ml-4">
-                            <p className="text-sm font-medium text-gray-600">Eventi 7gg</p>
-                            <p className="text-2xl font-bold text-gray-900">{dashboardData.upcomingEvents.length}</p>
-                        </div>
-                    </div>
-                </div>
+                <StatCard
+                    icon={Calendar}
+                    label="Eventi 7gg"
+                    value={dashboardData.upcomingEvents.length}
+                    color="blue"
+                    onClick={() => window.location.href = '/calendar'}
+                />
 
-                {/* Documenti in scadenza (solo admin/coach) */}
                 {(user.role === 'admin' || user.role === 'coach') && (
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <div className="flex items-center">
-                            <div className="p-2 bg-yellow-100 rounded-lg">
-                                <AlertTriangle className="h-6 w-6 text-yellow-600" />
-                            </div>
-                            <div className="ml-4">
-                                <p className="text-sm font-medium text-gray-600">Scadenze</p>
-                                <p className="text-2xl font-bold text-gray-900">{dashboardData.expiringDocuments.length}</p>
-                            </div>
-                        </div>
-                    </div>
+                    <StatCard
+                        icon={AlertTriangle}
+                        label="Scadenze"
+                        value={dashboardData.expiringDocuments.length}
+                        color="yellow"
+                        onClick={() => window.location.href = '/documents?filter=expiring'}
+                    />
                 )}
 
-                {/* I miei atleti (solo genitori) */}
                 {user.role === 'parent' && (
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <div className="flex items-center">
-                            <div className="p-2 bg-green-100 rounded-lg">
-                                <Users className="h-6 w-6 text-green-600" />
-                            </div>
-                            <div className="ml-4">
-                                <p className="text-sm font-medium text-gray-600">I miei atleti</p>
-                                <p className="text-2xl font-bold text-gray-900">{dashboardData.myAthletes.length}</p>
-                            </div>
-                        </div>
-                    </div>
+                    <StatCard
+                        icon={Users}
+                        label="I miei atleti"
+                        value={dashboardData.myAthletes.length}
+                        color="green"
+                        onClick={() => window.location.href = '/athletes'}
+                    />
                 )}
 
-                {/* Statistiche totali (solo admin) */}
                 {user.role === 'admin' && (
-                    <div className="bg-white rounded-lg shadow p-6">
-                        <div className="flex items-center">
-                            <div className="p-2 bg-purple-100 rounded-lg">
-                                <TrendingUp className="h-6 w-6 text-purple-600" />
-                            </div>
-                            <div className="ml-4">
-                                <p className="text-sm font-medium text-gray-600">Utenti totali</p>
-                                <p className="text-2xl font-bold text-gray-900">{dashboardData.stats.total_users || 0}</p>
-                            </div>
-                        </div>
-                    </div>
+                    <StatCard
+                        icon={TrendingUp}
+                        label="Utenti totali"
+                        value={dashboardData.stats.total_users || 0}
+                        color="purple"
+                        onClick={() => window.location.href = '/users'}
+                    />
+                )}
+
+                {(user.role !== 'admin' && user.role !== 'parent') && (
+                    <StatCard
+                        icon={Activity}
+                        label="Attività"
+                        value="12"
+                        color="indigo"
+                    />
                 )}
             </div>
 
             {/* Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Eventi prossimi */}
-                <div className="bg-white rounded-lg shadow">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="p-6 border-b border-gray-200">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-gray-900">Prossimi Eventi</h2>
+                            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                                <Calendar className="h-5 w-5 mr-2 text-blue-600" />
+                                Prossimi Eventi
+                            </h2>
                             <Link
                                 to="/calendar"
-                                className="text-sm text-blue-600 hover:text-blue-700 flex items-center"
+                                className="text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium transition-colors"
                             >
                                 Vedi tutti
                                 <ArrowRight className="ml-1 h-4 w-4" />
@@ -271,32 +294,49 @@ const Dashboard = () => {
                     </div>
                     <div className="p-6">
                         {dashboardData.upcomingEvents.length === 0 ? (
-                            <div className="text-center py-8">
+                            <div className="text-center py-12">
                                 <Calendar className="mx-auto h-12 w-12 text-gray-400" />
-                                <h3 className="mt-2 text-sm font-medium text-gray-900">Nessun evento</h3>
-                                <p className="mt-1 text-sm text-gray-500">
+                                <h3 className="mt-4 text-lg font-medium text-gray-900">Nessun evento</h3>
+                                <p className="mt-2 text-sm text-gray-500">
                                     Non ci sono eventi programmati nei prossimi 7 giorni
                                 </p>
+                                {(user.role === 'admin' || user.role === 'coach') && (
+                                    <Link
+                                        to="/events/new"
+                                        className="mt-4 inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Aggiungi Evento
+                                    </Link>
+                                )}
                             </div>
                         ) : (
                             <div className="space-y-4">
                                 {dashboardData.upcomingEvents.map((event) => (
-                                    <div key={event.id} className="flex items-start space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                                    <div key={event.id} className="flex items-start space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                                         <div className={`p-2 rounded-lg ${getEventTypeColor(event.event_type)}`}>
                                             <Calendar className="h-4 w-4" />
                                         </div>
-                                        <div className="flex-1">
-                                            <h3 className="text-sm font-medium text-gray-900">{event.title}</h3>
-                                            <p className="text-xs text-gray-600 mt-1">
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-sm font-medium text-gray-900 truncate">{event.title}</h3>
+                                            <p className="text-sm text-gray-600 mt-1">
                                                 {formatEventDate(event.start_datetime)}
                                             </p>
                                             {event.location && (
-                                                <p className="text-xs text-gray-500 mt-1">📍 {event.location}</p>
+                                                <p className="text-xs text-gray-500 mt-1 flex items-center">
+                                                    📍 {event.location}
+                                                </p>
                                             )}
-                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-2 ${getEventTypeColor(event.event_type)}`}>
-                        {getEventTypeLabel(event.event_type)}
-                      </span>
+                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-2 border ${getEventTypeColor(event.event_type)}`}>
+                                                {getEventTypeLabel(event.event_type)}
+                                            </span>
                                         </div>
+                                        <Link
+                                            to={`/events/${event.id}`}
+                                            className="text-gray-400 hover:text-gray-600"
+                                        >
+                                            <Eye className="h-4 w-4" />
+                                        </Link>
                                     </div>
                                 ))}
                             </div>
@@ -305,13 +345,16 @@ const Dashboard = () => {
                 </div>
 
                 {/* Comunicazioni recenti */}
-                <div className="bg-white rounded-lg shadow">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="p-6 border-b border-gray-200">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold text-gray-900">Comunicazioni Recenti</h2>
+                            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                                <MessageSquare className="h-5 w-5 mr-2 text-green-600" />
+                                Comunicazioni Recenti
+                            </h2>
                             <Link
                                 to="/communications"
-                                className="text-sm text-blue-600 hover:text-blue-700 flex items-center"
+                                className="text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium transition-colors"
                             >
                                 Vedi tutte
                                 <ArrowRight className="ml-1 h-4 w-4" />
@@ -320,28 +363,37 @@ const Dashboard = () => {
                     </div>
                     <div className="p-6">
                         {dashboardData.recentCommunications.length === 0 ? (
-                            <div className="text-center py-8">
+                            <div className="text-center py-12">
                                 <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
-                                <h3 className="mt-2 text-sm font-medium text-gray-900">Nessuna comunicazione</h3>
-                                <p className="mt-1 text-sm text-gray-500">
+                                <h3 className="mt-4 text-lg font-medium text-gray-900">Nessuna comunicazione</h3>
+                                <p className="mt-2 text-sm text-gray-500">
                                     Non ci sono comunicazioni recenti
                                 </p>
+                                {(user.role === 'admin' || user.role === 'coach') && (
+                                    <Link
+                                        to="/communications/new"
+                                        className="mt-4 inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Nuova Comunicazione
+                                    </Link>
+                                )}
                             </div>
                         ) : (
                             <div className="space-y-4">
                                 {dashboardData.recentCommunications.map((communication) => (
-                                    <div key={communication.id} className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
+                                    <div key={communication.id} className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                                         <div className="flex items-start justify-between">
-                                            <div className="flex-1">
+                                            <div className="flex-1 min-w-0">
                                                 <h3 className="text-sm font-medium text-gray-900 flex items-center">
-                                                    {communication.title}
+                                                    <span className="truncate">{communication.title}</span>
                                                     {communication.is_urgent && (
                                                         <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              Urgente
-                            </span>
+                                                            Urgente
+                                                        </span>
                                                     )}
                                                 </h3>
-                                                <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                                                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
                                                     {communication.content.length > 100
                                                         ? communication.content.substring(0, 100) + '...'
                                                         : communication.content
@@ -351,9 +403,17 @@ const Dashboard = () => {
                                                     {format(new Date(communication.sent_at), 'dd/MM/yyyy HH:mm')}
                                                 </p>
                                             </div>
-                                            {!communication.is_read && (
-                                                <div className="w-2 h-2 bg-blue-600 rounded-full ml-4 mt-2" />
-                                            )}
+                                            <div className="flex items-center space-x-2 ml-4">
+                                                {!communication.is_read && (
+                                                    <div className="w-2 h-2 bg-blue-600 rounded-full" />
+                                                )}
+                                                <Link
+                                                    to={`/communications/${communication.id}`}
+                                                    className="text-gray-400 hover:text-gray-600"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </Link>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -361,150 +421,145 @@ const Dashboard = () => {
                         )}
                     </div>
                 </div>
-
-                {/* I miei atleti (solo genitori) */}
-                {user.role === 'parent' && (
-                    <div className="bg-white rounded-lg shadow lg:col-span-2">
-                        <div className="p-6 border-b border-gray-200">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold text-gray-900">I Miei Atleti</h2>
-                                <Link
-                                    to="/athletes"
-                                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center"
-                                >
-                                    Gestisci
-                                    <ArrowRight className="ml-1 h-4 w-4" />
-                                </Link>
-                            </div>
-                        </div>
-                        <div className="p-6">
-                            {dashboardData.myAthletes.length === 0 ? (
-                                <div className="text-center py-8">
-                                    <Users className="mx-auto h-12 w-12 text-gray-400" />
-                                    <h3 className="mt-2 text-sm font-medium text-gray-900">Nessun atleta associato</h3>
-                                    <p className="mt-1 text-sm text-gray-500">
-                                        Contatta l'amministratore per associare i tuoi atleti
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {dashboardData.myAthletes.map((athlete) => (
-                                        <div key={athlete.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
-                                            <div className="flex items-center space-x-3">
-                                                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-blue-600 font-medium text-sm">
-                            {athlete.first_name.charAt(0)}{athlete.last_name.charAt(0)}
-                          </span>
-                                                </div>
-                                                <div className="flex-1">
-                                                    <h3 className="text-sm font-medium text-gray-900">
-                                                        {athlete.first_name} {athlete.last_name}
-                                                    </h3>
-                                                    <p className="text-xs text-gray-500">
-                                                        {format(new Date(athlete.date_of_birth), 'dd/MM/yyyy')}
-                                                    </p>
-                                                    {athlete.groups_names && (
-                                                        <p className="text-xs text-blue-600 mt-1">
-                                                            {athlete.groups_names}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <Link
-                                                    to={`/athletes/${athlete.id}`}
-                                                    className="text-blue-600 hover:text-blue-700"
-                                                >
-                                                    <Eye className="h-4 w-4" />
-                                                </Link>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Documenti in scadenza (solo admin/coach) */}
-                {(user.role === 'admin' || user.role === 'coach') && (
-                    <div className="bg-white rounded-lg shadow lg:col-span-2">
-                        <div className="p-6 border-b border-gray-200">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold text-gray-900">Documenti in Scadenza</h2>
-                                <Link
-                                    to="/documents?filter=expiring"
-                                    className="text-sm text-blue-600 hover:text-blue-700 flex items-center"
-                                >
-                                    Vedi tutti
-                                    <ArrowRight className="ml-1 h-4 w-4" />
-                                </Link>
-                            </div>
-                        </div>
-                        <div className="p-6">
-                            {dashboardData.expiringDocuments.length === 0 ? (
-                                <div className="text-center py-8">
-                                    <CheckCircle className="mx-auto h-12 w-12 text-green-400" />
-                                    <h3 className="mt-2 text-sm font-medium text-gray-900">Tutto in regola!</h3>
-                                    <p className="mt-1 text-sm text-gray-500">
-                                        Non ci sono documenti in scadenza
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="space-y-3">
-                                    {dashboardData.expiringDocuments.slice(0, 5).map((doc) => (
-                                        <div key={doc.id} className={`p-3 border rounded-lg ${getDocumentUrgencyColor(doc.urgency_level)}`}>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <h3 className="text-sm font-medium">
-                                                        {doc.title} - {doc.first_name} {doc.last_name}
-                                                    </h3>
-                                                    <p className="text-xs mt-1">
-                                                        Scade il {format(new Date(doc.expiry_date), 'dd/MM/yyyy')}
-                                                    </p>
-                                                </div>
-                                                <span className="text-xs font-medium">
-                          {doc.urgency_level === 'expired' && 'SCADUTO'}
-                                                    {doc.urgency_level === 'urgent' && 'URGENTE'}
-                                                    {doc.urgency_level === 'warning' && 'IN SCADENZA'}
-                        </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                )}
             </div>
+
+            {/* Sezioni specifiche per ruolo */}
+            {user.role === 'parent' && dashboardData.myAthletes.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-6 border-b border-gray-200">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                                <Users className="h-5 w-5 mr-2 text-purple-600" />
+                                I Miei Atleti
+                            </h2>
+                            <Link
+                                to="/athletes"
+                                className="text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium transition-colors"
+                            >
+                                Gestisci
+                                <ArrowRight className="ml-1 h-4 w-4" />
+                            </Link>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {dashboardData.myAthletes.map((athlete) => (
+                                <div key={athlete.id} className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition-shadow">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                            <span className="text-white font-medium text-sm">
+                                                {athlete.first_name.charAt(0)}{athlete.last_name.charAt(0)}
+                                            </span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="text-sm font-medium text-gray-900 truncate">
+                                                {athlete.first_name} {athlete.last_name}
+                                            </h3>
+                                            <p className="text-xs text-gray-500">
+                                                {format(new Date(athlete.date_of_birth), 'dd/MM/yyyy')}
+                                            </p>
+                                            {athlete.groups_names && (
+                                                <p className="text-xs text-blue-600 mt-1 truncate">
+                                                    {athlete.groups_names}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <Link
+                                            to={`/athletes/${athlete.id}`}
+                                            className="text-blue-600 hover:text-blue-700"
+                                        >
+                                            <Eye className="h-4 w-4" />
+                                        </Link>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Documenti in scadenza (solo admin/coach) */}
+            {(user.role === 'admin' || user.role === 'coach') && dashboardData.expiringDocuments.length > 0 && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-6 border-b border-gray-200">
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                                <AlertTriangle className="h-5 w-5 mr-2 text-orange-600" />
+                                Documenti in Scadenza
+                            </h2>
+                            <Link
+                                to="/documents?filter=expiring"
+                                className="text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium transition-colors"
+                            >
+                                Vedi tutti
+                                <ArrowRight className="ml-1 h-4 w-4" />
+                            </Link>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <div className="space-y-3">
+                            {dashboardData.expiringDocuments.slice(0, 5).map((doc) => (
+                                <div key={doc.id} className={`p-4 border rounded-lg ${getDocumentUrgencyColor(doc.urgency_level)}`}>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className="text-sm font-medium">
+                                                {doc.title} - {doc.first_name} {doc.last_name}
+                                            </h3>
+                                            <p className="text-xs mt-1">
+                                                Scade il {format(new Date(doc.expiry_date), 'dd/MM/yyyy')}
+                                            </p>
+                                        </div>
+                                        <span className="text-xs font-medium">
+                                            {doc.urgency_level === 'expired' && 'SCADUTO'}
+                                            {doc.urgency_level === 'urgent' && 'URGENTE'}
+                                            {doc.urgency_level === 'warning' && 'IN SCADENZA'}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Quick Actions */}
             {(user.role === 'admin' || user.role === 'coach') && (
-                <div className="bg-white rounded-lg shadow p-6">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">Azioni Rapide</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
+                        <Plus className="h-5 w-5 mr-2 text-green-600" />
+                        Azioni Rapide
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         <Link
                             to="/events/new"
-                            className="flex items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                            className="flex items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors group"
                         >
-                            <Plus className="h-5 w-5 text-gray-400 mr-2" />
-                            <span className="text-sm font-medium text-gray-700">Nuovo Evento</span>
+                            <div className="text-center">
+                                <Calendar className="h-8 w-8 text-gray-400 group-hover:text-blue-500 mx-auto mb-2" />
+                                <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600">Nuovo Evento</span>
+                            </div>
                         </Link>
 
                         {user.role === 'admin' && (
                             <Link
                                 to="/athletes/new"
-                                className="flex items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                                className="flex items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors group"
                             >
-                                <Plus className="h-5 w-5 text-gray-400 mr-2" />
-                                <span className="text-sm font-medium text-gray-700">Nuovo Atleta</span>
+                                <div className="text-center">
+                                    <Users className="h-8 w-8 text-gray-400 group-hover:text-green-500 mx-auto mb-2" />
+                                    <span className="text-sm font-medium text-gray-700 group-hover:text-green-600">Nuovo Atleta</span>
+                                </div>
                             </Link>
                         )}
 
                         <Link
                             to="/communications/new"
-                            className="flex items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                            className="flex items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors group"
                         >
-                            <Plus className="h-5 w-5 text-gray-400 mr-2" />
-                            <span className="text-sm font-medium text-gray-700">Nuova Comunicazione</span>
+                            <div className="text-center">
+                                <MessageSquare className="h-8 w-8 text-gray-400 group-hover:text-purple-500 mx-auto mb-2" />
+                                <span className="text-sm font-medium text-gray-700 group-hover:text-purple-600">Nuova Comunicazione</span>
+                            </div>
                         </Link>
                     </div>
                 </div>

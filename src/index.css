@@ -600,3 +600,319 @@
         page-break-inside: avoid;
     }
 }
+
+/* Miglioramenti aggiuntivi per il layout */
+
+/* Transizioni smooth per sidebar */
+.sidebar-transition {
+    transition: width 0.3s ease-in-out, margin-left 0.3s ease-in-out;
+}
+
+/* Miglioramento delle card statistiche */
+.stat-card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+/* Miglioramento per le icone dei gradient */
+.gradient-icon-blue {
+    background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+}
+
+.gradient-icon-red {
+    background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%);
+}
+
+.gradient-icon-green {
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+}
+
+.gradient-icon-yellow {
+    background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+
+.gradient-icon-purple {
+    background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%);
+}
+
+.gradient-icon-indigo {
+    background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%);
+}
+
+/* Miglioramento della scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #cbd5e1, #94a3b8);
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #94a3b8, #64748b);
+}
+
+/* Animazioni per le notifiche */
+.notification-badge {
+    animation: pulse-notification 2s infinite;
+}
+
+@keyframes pulse-notification {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+}
+
+/* Hover effects per le card */
+.hover-lift {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+}
+
+/* Status indicators */
+.status-online::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    background: #10B981;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+    animation: pulse-online 2s infinite;
+}
+
+@keyframes pulse-online {
+    0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}
+
+/* Miglioramento per i bordi arrotondati */
+.rounded-xl {
+    border-radius: 1rem;
+}
+
+.rounded-2xl {
+    border-radius: 1.5rem;
+}
+
+/* Shadow personalizzate */
+.shadow-soft {
+    box-shadow: 0 2px 15px 0 rgba(0, 0, 0, 0.08);
+}
+
+.shadow-medium {
+    box-shadow: 0 4px 25px 0 rgba(0, 0, 0, 0.1);
+}
+
+.shadow-strong {
+    box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.15);
+}
+
+/* Gradient backgrounds */
+.bg-gradient-blue {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.bg-gradient-green {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.bg-gradient-purple {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+/* Text gradients */
+.text-gradient-blue {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* Loading states */
+.skeleton-pulse {
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-loading {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.4;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .mobile-padding {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    .mobile-text-sm {
+        font-size: 0.875rem;
+    }
+
+    .mobile-grid-1 {
+        grid-template-columns: repeat(1, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 640px) {
+    .sidebar-mobile-full {
+        width: 100vw;
+    }
+
+    .mobile-card-padding {
+        padding: 1rem;
+    }
+
+    .mobile-stat-compact .stat-value {
+        font-size: 1.5rem;
+    }
+}
+
+/* Focus states migliorati */
+.focus-visible-blue:focus-visible {
+    outline: 2px solid #3B82F6;
+    outline-offset: 2px;
+}
+
+.focus-visible-green:focus-visible {
+    outline: 2px solid #10B981;
+    outline-offset: 2px;
+}
+
+/* Theme variables per dark mode futuro */
+:root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --border-color: #e5e7eb;
+    --accent-blue: #3b82f6;
+    --accent-green: #10b981;
+    --accent-red: #ef4444;
+    --accent-yellow: #f59e0b;
+}
+
+/* Utility classes per spacing consistente */
+.space-y-8 > * + * {
+    margin-top: 2rem;
+}
+
+.space-y-6 > * + * {
+    margin-top: 1.5rem;
+}
+
+.space-y-4 > * + * {
+    margin-top: 1rem;
+}
+
+/* Grid auto-fit per responsività */
+.grid-auto-fit {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.grid-auto-fill {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+/* Miglioramenti per accessibility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .card {
+        border-width: 2px;
+        border-color: #000000;
+    }
+
+    .button {
+        border-width: 2px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* Print styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+
+    .print-break-before {
+        page-break-before: always;
+    }
+
+    .print-break-after {
+        page-break-after: always;
+    }
+
+    body {
+        background: white !important;
+        color: black !important;
+    }
+
+    .sidebar {
+        display: none !important;
+    }
+
+    .main-content {
+        margin-left: 0 !important;
+        padding-left: 0 !important;
+    }
+}
