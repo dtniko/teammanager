@@ -1,14 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Users, Calendar, FileText, Bell, Smartphone } from 'lucide-react';
+import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingSpinner from '../Common/LoadingSpinner';
 
+// Il client OAuth Google configurato e' stato eliminato lato Google Cloud Console:
+// tenere il bottone attivo genera un loop di richieste fallite verso accounts.google.com.
+// Riattivare non appena viene configurato un nuovo client valido in GOOGLE_CLIENT_ID.
+const GOOGLE_SIGNIN_ENABLED = false;
+
 const Login = () => {
-    const { loginWithGoogle } = useAuth();
+    const { loginWithGoogle, login } = useAuth();
     const [loading, setLoading] = useState(false);
     const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [credentialsLoading, setCredentialsLoading] = useState(false);
+    const [clearingCache, setClearingCache] = useState(false);
+
+    // TODO temporaneo: pulsante di debug per svuotare service worker/cache durante lo sviluppo. Rimuovere quando non serve piu'.
+    const handleClearCache = async () => {
+        setClearingCache(true);
+        try {
+            if ('serviceWorker' in navigator) {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map((r) => r.unregister()));
+            }
+            if ('caches' in window) {
+                const keys = await caches.keys();
+                await Promise.all(keys.map((k) => caches.delete(k)));
+            }
+        } catch (error) {
+            console.error('Errore nella pulizia della cache:', error);
+        } finally {
+            window.location.reload();
+        }
+    };
 
     useEffect(() => {
+        if (!GOOGLE_SIGNIN_ENABLED) {
+            return;
+        }
+
         // Inizializza Google Sign-In
         const initializeGoogleSignIn = () => {
             if (window.google) {
@@ -66,6 +99,30 @@ const Login = () => {
             console.error('Errore nel login Google:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleCredentialsLogin = async (e) => {
+        e.preventDefault();
+
+        if (!email || !password) {
+            toast.error('Inserisci email e password');
+            return;
+        }
+
+        setCredentialsLoading(true);
+
+        try {
+            const result = await login(email, password);
+
+            if (!result.success) {
+                // AuthContext.login mostra gia' un toast d'errore, non duplicarlo qui
+            }
+        } catch (error) {
+            console.error('Errore nel login con email/password:', error);
+            toast.error('Credenziali non valide');
+        } finally {
+            setCredentialsLoading(false);
         }
     };
 
@@ -174,28 +231,89 @@ const Login = () => {
                                 Accedi alla piattaforma
                             </h2>
                             <p className="text-gray-600">
-                                Effettua il login con il tuo account Google per continuare
+                                Accedi con le tue credenziali per continuare
                             </p>
                         </div>
 
                         {/* Login Form */}
                         <div className="space-y-6">
-                            {/* Google Sign In Button */}
-                            <div className="relative">
-                                {loading && (
-                                    <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center rounded-lg z-10">
+                            {GOOGLE_SIGNIN_ENABLED && (
+                                <>
+                                    {/* Google Sign In Button */}
+                                    <div className="relative">
+                                        {loading && (
+                                            <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center rounded-lg z-10">
+                                                <LoadingSpinner size="small" text="Accesso in corso..." />
+                                            </div>
+                                        )}
+
+                                        {!isGoogleLoaded && (
+                                            <div className="flex items-center justify-center p-4 border border-gray-300 rounded-lg">
+                                                <LoadingSpinner size="small" text="Caricamento..." />
+                                            </div>
+                                        )}
+
+                                        <div id="google-signin-button" className={isGoogleLoaded ? '' : 'hidden'} />
+                                    </div>
+
+                                    {/* Divider */}
+                                    <div className="relative">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <div className="w-full border-t border-gray-300" />
+                                        </div>
+                                        <div className="relative flex justify-center text-sm">
+                          <span className="px-2 bg-white text-gray-500">
+                            Oppure accedi con email e password
+                          </span>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Email/Password Login Form */}
+                            <form onSubmit={handleCredentialsLogin} className="space-y-4">
+                                <div>
+                                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Email
+                                    </label>
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        autoComplete="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="nome@esempio.it"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                                        Password
+                                    </label>
+                                    <input
+                                        id="password"
+                                        type="password"
+                                        autoComplete="current-password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        placeholder="••••••••"
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={credentialsLoading}
+                                    className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                                >
+                                    {credentialsLoading ? (
                                         <LoadingSpinner size="small" text="Accesso in corso..." />
-                                    </div>
-                                )}
-
-                                {!isGoogleLoaded && (
-                                    <div className="flex items-center justify-center p-4 border border-gray-300 rounded-lg">
-                                        <LoadingSpinner size="small" text="Caricamento..." />
-                                    </div>
-                                )}
-
-                                <div id="google-signin-button" className={isGoogleLoaded ? '' : 'hidden'} />
-                            </div>
+                                    ) : (
+                                        'Accedi'
+                                    )}
+                                </button>
+                            </form>
 
                             {/* Divider */}
                             <div className="relative">
@@ -224,6 +342,16 @@ const Login = () => {
                                     <li>• Accesso immediato alle funzionalità</li>
                                 </ul>
                             </div>
+
+                            {/* TODO temporaneo: rimuovere quando non serve piu' per il debug */}
+                            <button
+                                type="button"
+                                onClick={handleClearCache}
+                                disabled={clearingCache}
+                                className="w-full text-xs text-gray-400 hover:text-gray-600 underline disabled:opacity-50"
+                            >
+                                {clearingCache ? 'Pulizia in corso...' : '🧹 Pulisci cache/service worker e ricarica (debug)'}
+                            </button>
 
                             {/* Support Info */}
                             <div className="text-center">

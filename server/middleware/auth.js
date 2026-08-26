@@ -18,7 +18,7 @@ const authenticateToken = async (req, res, next) => {
 
         // Verifica che l'utente esista ancora nel database
         const userResult = await query(
-            'SELECT id, email, first_name, last_name, role, is_active FROM users WHERE id = $1 AND is_active = true',
+            'SELECT id, email, first_name, last_name, role, is_active, must_change_password FROM users WHERE id = $1 AND is_active = true',
             [decoded.userId]
         );
 
@@ -31,7 +31,8 @@ const authenticateToken = async (req, res, next) => {
             email: userResult.rows[0].email,
             firstName: userResult.rows[0].first_name,
             lastName: userResult.rows[0].last_name,
-            role: userResult.rows[0].role
+            role: userResult.rows[0].role,
+            mustChangePassword: userResult.rows[0].must_change_password
         };
 
         next();

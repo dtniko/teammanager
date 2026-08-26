@@ -17,8 +17,11 @@ class ApiService {
             (error) => {
                 console.error('API Error:', error);
 
-                if (error.response?.status === 401) {
-                    // Token scaduto o non valido
+                const isAuthEndpoint = error.config?.url?.startsWith('/auth/login')
+                    || error.config?.url?.startsWith('/auth/google');
+
+                if (error.response?.status === 401 && !isAuthEndpoint) {
+                    // Token scaduto o non valido (non un tentativo di login fallito)
                     this.handleUnauthorized();
                 }
 
@@ -49,6 +52,14 @@ class ApiService {
         return this.client.post('/auth/google', { googleToken });
     }
 
+    async login(email, password) {
+        return this.client.post('/auth/login', { email, password });
+    }
+
+    async changePassword(currentPassword, newPassword) {
+        return this.client.post('/auth/change-password', { currentPassword, newPassword });
+    }
+
     async verifyToken() {
         return this.client.get('/auth/verify');
     }
@@ -73,6 +84,10 @@ class ApiService {
 
     async getUsers(params = {}) {
         return this.client.get('/users', { params });
+    }
+
+    async createUser(userData) {
+        return this.client.post('/users', userData);
     }
 
     async getUserById(userId) {
@@ -191,6 +206,18 @@ class ApiService {
             status,
             notes
         });
+    }
+
+    async conveneGroup(eventId, athleteIds = null) {
+        return this.client.post(`/events/${eventId}/convene`, athleteIds ? { athleteIds } : {});
+    }
+
+    async markActualAttendance(eventId, athleteId, actualStatus) {
+        return this.client.post(`/events/${eventId}/actual-attendance`, { athleteId, actualStatus });
+    }
+
+    async getAttendanceSummary(params = {}) {
+        return this.client.get('/events/reports/attendance-summary', { params });
     }
 
     // === DOCUMENT ENDPOINTS ===

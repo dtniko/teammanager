@@ -1,6 +1,9 @@
 const express = require('express');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
 const { query, getClient } = require('../config/database');
 const { requireRole } = require('../middleware/auth');
+const { sendWelcomeEmail } = require('../services/email');
 
 const router = express.Router();
 
@@ -89,6 +92,53 @@ router.put('/profile', async (req, res) => {
     }
 });
 
+// Crea nuovo utente (solo admin)
+router.post('/', requireRole(['admin']), async (req, res) => {
+    try {
+        const { email, firstName, lastName, role, phone } = req.body;
+
+        if (!email || !firstName || !lastName || !role) {
+            return res.status(400).json({ error: 'Email, nome, cognome e ruolo sono obbligatori' });
+        }
+
+        if (!['admin', 'coach', 'parent', 'athlete'].includes(role)) {
+            return res.status(400).json({ error: 'Ruolo non valido' });
+        }
+
+        const existingResult = await query('SELECT id FROM users WHERE email = $1', [email]);
+
+        if (existingResult.rows.length > 0) {
+            return res.status(409).json({ error: 'Email già registrata' });
+        }
+
+        const temporaryPassword = crypto.randomBytes(9).toString('base64').replace(/[+/=]/g, '').slice(0, 12);
+        const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
+        const insertResult = await query(`
+      INSERT INTO users (email, first_name, last_name, role, phone, password_hash, must_change_password)
+      VALUES ($1, $2, $3, $4, $5, $6, true)
+      RETURNING id, email, first_name, last_name, role, phone, is_active, created_at
+    `, [email, firstName, lastName, role, phone || null, passwordHash]);
+
+        const user = insertResult.rows[0];
+
+        console.log(`👤 Nuovo utente creato da admin: ${user.email} (${user.role})`);
+
+        const result = await sendWelcomeEmail({ to: email, firstName, temporaryPassword });
+
+        res.status(201).json({
+            success: true,
+            user,
+            emailSent: result.sent,
+            temporaryPassword: result.sent ? undefined : temporaryPassword
+        });
+
+    } catch (error) {
+        console.error('Errore nella creazione dell\'utente:', error);
+        res.status(500).json({ error: 'Errore nella creazione dell\'utente' });
+    }
+});
+
 // Ottieni tutti gli utenti (solo admin)
 router.get('/', requireRole(['admin']), async (req, res) => {
     try {
@@ -154,7 +204,7 @@ router.get('/', requireRole(['admin']), async (req, res) => {
       SELECT COUNT(*) as total
       FROM users u
       WHERE ${whereClause}
-    `, queryParams.slice(0, -2));
+    `, queryParams);
 
         res.json({
             users: usersResult.rows,

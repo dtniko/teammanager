@@ -42,7 +42,13 @@ app.use('/api/documents', authenticateToken, documentRoutes);
 app.use('/api/communications', authenticateToken, communicationRoutes);
 app.use('/api/notifications', authenticateToken, notificationRoutes);
 
+// Health check
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 // Serve React app SOLO in production
+// NB: registrato DOPO tutte le route /api/* così il catch-all '*' non le intercetta
 console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
 if (process.env.NODE_ENV === 'production') {
     console.log('📦 Serving React build files');
@@ -62,11 +68,6 @@ if (process.env.NODE_ENV === 'production') {
         });
     });
 }
-
-// Health check
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'OK', timestamp: new Date().toISOString() });
-});
 
 // Error handling middleware
 app.use((err, req, res, next) => {

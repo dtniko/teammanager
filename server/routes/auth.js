@@ -1,9 +1,119 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const { verifyGoogleToken } = require('../middleware/auth');
+const bcrypt = require('bcryptjs');
+const { verifyGoogleToken, authenticateToken } = require('../middleware/auth');
 const { query } = require('../config/database');
 
 const router = express.Router();
+
+// Login con email e password
+router.post('/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email e password sono obbligatorie' });
+        }
+
+        const userResult = await query(
+            'SELECT * FROM users WHERE email = $1 AND is_active = true',
+            [email]
+        );
+
+        if (userResult.rows.length === 0 || !userResult.rows[0].password_hash) {
+            return res.status(401).json({ error: 'Credenziali non valide' });
+        }
+
+        const user = userResult.rows[0];
+
+        const passwordMatches = await bcrypt.compare(password, user.password_hash);
+
+        if (!passwordMatches) {
+            return res.status(401).json({ error: 'Credenziali non valide' });
+        }
+
+        const token = jwt.sign(
+            {
+                userId: user.id,
+                email: user.email,
+                role: user.role
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        console.log(`🔑 Login utente (email/password): ${user.email} (${user.role})`);
+
+        res.json({
+            success: true,
+            token,
+            mustChangePassword: user.must_change_password,
+            user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.first_name,
+                lastName: user.last_name,
+                role: user.role
+            }
+        });
+
+    } catch (error) {
+        console.error('Errore nel login:', error);
+        res.status(500).json({
+            error: 'Errore nel login',
+            message: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+});
+
+// Cambio password
+router.post('/change-password', authenticateToken, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!newPassword || newPassword.length < 8) {
+            return res.status(400).json({ error: 'La nuova password deve avere almeno 8 caratteri' });
+        }
+
+        const userResult = await query('SELECT * FROM users WHERE id = $1', [req.user.id]);
+
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Utente non trovato' });
+        }
+
+        const user = userResult.rows[0];
+
+        if (!user.must_change_password) {
+            if (!currentPassword) {
+                return res.status(400).json({ error: 'Password attuale richiesta' });
+            }
+
+            const passwordMatches = await bcrypt.compare(currentPassword, user.password_hash || '');
+
+            if (!passwordMatches) {
+                return res.status(401).json({ error: 'Password attuale non valida' });
+            }
+        }
+
+        const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+        await query(
+            'UPDATE users SET password_hash = $1, must_change_password = false, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            [newPasswordHash, user.id]
+        );
+
+        console.log(`🔐 Password cambiata per: ${user.email}`);
+
+        res.json({
+            success: true,
+            message: 'Password aggiornata con successo'
+        });
+
+    } catch (error) {
+        console.error('Errore nel cambio password:', error);
+        res.status(500).json({ error: 'Errore nel cambio password' });
+    }
+});
 
 // Login con Google
 router.post('/google', async (req, res) => {

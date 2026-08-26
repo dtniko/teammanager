@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import {
@@ -39,17 +39,7 @@ const AthleteDetail = () => {
     const [activeTab, setActiveTab] = useState('details');
     const [uploadingDocument, setUploadingDocument] = useState(false);
 
-    useEffect(() => {
-        loadAthleteData();
-    }, [athleteId, loadAthleteData]);
-
-    useEffect(() => {
-        if (activeTab === 'documents') {
-            loadDocuments();
-        }
-    }, [activeTab, athleteId, loadAthleteData]);
-
-    const loadAthleteData = async () => {
+    const loadAthleteData = useCallback(async () => {
         try {
             setLoading(true);
             const response = await apiService.getAthleteById(athleteId);
@@ -61,9 +51,9 @@ const AthleteDetail = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [athleteId, navigate]);
 
-    const loadDocuments = async () => {
+    const loadDocuments = useCallback(async () => {
         try {
             setDocumentsLoading(true);
             const response = await apiService.getDocuments(athleteId);
@@ -74,7 +64,17 @@ const AthleteDetail = () => {
         } finally {
             setDocumentsLoading(false);
         }
-    };
+    }, [athleteId]);
+
+    useEffect(() => {
+        loadAthleteData();
+    }, [athleteId, loadAthleteData]);
+
+    useEffect(() => {
+        if (activeTab === 'documents') {
+            loadDocuments();
+        }
+    }, [activeTab, athleteId, loadDocuments]);
 
     const calculateAge = (birthDate) => {
         const today = new Date();

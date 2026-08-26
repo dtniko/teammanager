@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const { query, getClient } = require('../config/database');
 const { requireRole, canAccessGroup } = require('../middleware/auth');
 
@@ -126,10 +127,15 @@ router.get('/', async (req, res) => {
           WHERE a.event_id = e.id AND a.status = 'absent'
         ) as absent_count,
         (
-          SELECT COUNT(*) 
-          FROM attendance a 
+          SELECT COUNT(*)
+          FROM attendance a
           WHERE a.event_id = e.id AND a.status = 'pending'
-        ) as pending_count
+        ) as pending_count,
+        (
+          SELECT COUNT(*)
+          FROM attendance a
+          WHERE a.event_id = e.id AND a.status = 'called_up'
+        ) as called_up_count
       FROM events e
       LEFT JOIN groups g ON e.group_id = g.id
       LEFT JOIN users u ON e.created_by = u.id
@@ -146,6 +152,78 @@ router.get('/', async (req, res) => {
 
     } catch (error) {
         console.error('Errore nel recupero degli eventi:', error);
+        res.status(500).json({ error: 'Errore interno del server' });
+    }
+});
+
+// Report riepilogo presenze per atleta
+router.get('/reports/attendance-summary', requireRole(['admin', 'coach']), async (req, res) => {
+    try {
+        const { groupId, startDate, endDate } = req.query;
+
+        // Verifica accesso al gruppo per i coach
+        if (req.user.role === 'coach' && groupId) {
+            const accessResult = await query(
+                'SELECT 1 FROM staff_group WHERE user_id = $1 AND group_id = $2',
+                [req.user.id, groupId]
+            );
+
+            if (accessResult.rows.length === 0) {
+                return res.status(403).json({ error: 'Non puoi accedere ai report di questo gruppo' });
+            }
+        }
+
+        let groupFilterClause = '';
+        const queryParams = [];
+        let paramIndex = 1;
+
+        if (groupId) {
+            groupFilterClause = `AND ag.group_id = $${paramIndex}`;
+            queryParams.push(groupId);
+            paramIndex++;
+        } else if (req.user.role === 'coach') {
+            groupFilterClause = `AND ag.group_id IN (SELECT group_id FROM staff_group WHERE user_id = $${paramIndex})`;
+            queryParams.push(req.user.id);
+            paramIndex++;
+        }
+
+        let dateFilterClause;
+        if (startDate) {
+            dateFilterClause = `e.start_datetime >= $${paramIndex}`;
+            queryParams.push(startDate);
+            paramIndex++;
+        } else {
+            dateFilterClause = `e.start_datetime >= CURRENT_DATE - INTERVAL '90 days'`;
+        }
+
+        if (endDate) {
+            dateFilterClause += ` AND e.start_datetime <= $${paramIndex}`;
+            queryParams.push(endDate);
+            paramIndex++;
+        } else {
+            dateFilterClause += ` AND e.start_datetime <= CURRENT_DATE + INTERVAL '1 day'`;
+        }
+
+        const summaryResult = await query(`
+      SELECT
+        athlete.id as athlete_id, athlete.first_name, athlete.last_name,
+        COUNT(*) FILTER (WHERE a.status = 'absent') as notified_absences,
+        COUNT(*) FILTER (WHERE a.actual_status = 'absent' AND a.status IN ('present', 'called_up', 'pending')) as unnotified_absences,
+        COUNT(*) FILTER (WHERE a.actual_status = 'present') as confirmed_present,
+        COUNT(DISTINCT a.event_id) as total_events
+      FROM athletes athlete
+      JOIN athlete_group ag ON ag.athlete_id = athlete.id AND ag.is_active = true
+      JOIN attendance a ON a.athlete_id = athlete.id
+      JOIN events e ON e.id = a.event_id AND e.is_active = true
+      WHERE ${dateFilterClause} ${groupFilterClause}
+      GROUP BY athlete.id, athlete.first_name, athlete.last_name
+      ORDER BY athlete.last_name, athlete.first_name
+    `, queryParams);
+
+        res.json({ summary: summaryResult.rows });
+
+    } catch (error) {
+        console.error('Errore nel recupero del report presenze:', error);
         res.status(500).json({ error: 'Errore interno del server' });
     }
 });
@@ -206,13 +284,16 @@ router.get('/:eventId', async (req, res) => {
 
         // Ottieni le presenze
         const attendanceResult = await query(`
-      SELECT 
+      SELECT
         a.id, a.status, a.notes, a.marked_at,
-        athlete.id as athlete_id, athlete.first_name, athlete.last_name,
-        marker.first_name as marked_by_first_name, marker.last_name as marked_by_last_name
+        a.actual_status, a.actual_marked_at,
+        athlete.id as athlete_id, athlete.first_name, athlete.last_name, athlete.user_id as athlete_user_id,
+        marker.first_name as marked_by_first_name, marker.last_name as marked_by_last_name,
+        actual_marker.first_name as actual_marked_by_first_name, actual_marker.last_name as actual_marked_by_last_name
       FROM attendance a
       JOIN athletes athlete ON a.athlete_id = athlete.id
       LEFT JOIN users marker ON a.marked_by = marker.id
+      LEFT JOIN users actual_marker ON a.actual_marked_by = actual_marker.id
       WHERE a.event_id = $1
       ORDER BY athlete.last_name, athlete.first_name
     `, [eventId]);
@@ -236,7 +317,8 @@ router.post('/', requireRole(['admin', 'coach']), async (req, res) => {
 
         const {
             title, description, eventType, startDatetime, endDatetime,
-            location, groupId, isRecurring = false, recurringPattern = null
+            location, groupId, isRecurring = false, recurringPattern = null,
+            recurringUntil = null
         } = req.body;
 
         // Validazione
@@ -258,38 +340,80 @@ router.post('/', requireRole(['admin', 'coach']), async (req, res) => {
             }
         }
 
-        // Crea l'evento
-        const eventResult = await client.query(`
-      INSERT INTO events (
-        title, description, event_type, start_datetime, end_datetime,
-        location, group_id, created_by, is_recurring, recurring_pattern
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      RETURNING *
-    `, [
-            title, description, eventType, startDatetime, endDatetime,
-            location, groupId, req.user.id, isRecurring, recurringPattern
-        ]);
+        // Calcola le date di inizio/fine per ciascuna occorrenza
+        const occurrenceDates = [];
+        const startDate = new Date(startDatetime);
+        const endDate = new Date(endDatetime);
+        const duration = endDate.getTime() - startDate.getTime();
 
-        const event = eventResult.rows[0];
+        if (isRecurring && recurringUntil) {
+            const untilDate = new Date(`${recurringUntil}T23:59:59`);
+            const MAX_OCCURRENCES = 104; // ~2 anni
 
-        // Se l'evento è associato a un gruppo, crea le presenze per tutti gli atleti del gruppo
-        if (groupId) {
-            await client.query(`
-        INSERT INTO attendance (event_id, athlete_id, status)
-        SELECT $1, ag.athlete_id, 'pending'
-        FROM athlete_group ag
-        WHERE ag.group_id = $2 AND ag.is_active = true
-      `, [event.id, groupId]);
+            let currentStart = new Date(startDate.getTime());
+            let count = 0;
+
+            while (currentStart.getTime() <= untilDate.getTime() && count < MAX_OCCURRENCES) {
+                occurrenceDates.push({
+                    start: new Date(currentStart.getTime()),
+                    end: new Date(currentStart.getTime() + duration)
+                });
+                currentStart = new Date(currentStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+                count++;
+            }
+        } else {
+            occurrenceDates.push({ start: startDate, end: endDate });
+        }
+
+        const recurringGroupId = (isRecurring && recurringUntil) ? crypto.randomUUID() : null;
+        const finalRecurringPattern = (isRecurring && recurringUntil)
+            ? JSON.stringify({ frequency: 'weekly', until: recurringUntil })
+            : recurringPattern;
+
+        const createdEvents = [];
+
+        for (const occurrence of occurrenceDates) {
+            const eventResult = await client.query(`
+        INSERT INTO events (
+          title, description, event_type, start_datetime, end_datetime,
+          location, group_id, created_by, is_recurring, recurring_pattern, recurring_group_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING *
+      `, [
+                title, description, eventType, occurrence.start, occurrence.end,
+                location, groupId, req.user.id, isRecurring, finalRecurringPattern, recurringGroupId
+            ]);
+
+            const event = eventResult.rows[0];
+
+            // Se l'evento è associato a un gruppo, crea le presenze per tutti gli atleti del gruppo
+            // Per gli allenamenti sono sempre tutti convocati; per gli altri tipi di evento
+            // (partita, riunione) restano da convocare esplicitamente
+            if (groupId) {
+                const initialStatus = eventType === 'training' ? 'called_up' : 'pending';
+                await client.query(`
+          INSERT INTO attendance (event_id, athlete_id, status)
+          SELECT $1, ag.athlete_id, $3
+          FROM athlete_group ag
+          WHERE ag.group_id = $2 AND ag.is_active = true
+        `, [event.id, groupId, initialStatus]);
+            }
+
+            createdEvents.push(event);
         }
 
         await client.query('COMMIT');
 
-        console.log(`📅 Nuovo evento creato: ${event.title} per il ${event.start_datetime}`);
+        console.log(`📅 ${createdEvents.length} evento/i creato/i: ${createdEvents[0].title} per il ${createdEvents[0].start_datetime}`);
 
         res.status(201).json({
             success: true,
-            event,
-            message: 'Evento creato con successo'
+            event: createdEvents[0],
+            events: createdEvents,
+            count: createdEvents.length,
+            message: createdEvents.length > 1
+                ? `${createdEvents.length} eventi creati con successo`
+                : 'Evento creato con successo'
         });
 
     } catch (error) {
@@ -360,8 +484,12 @@ router.post('/:eventId/attendance', async (req, res) => {
         const { eventId } = req.params;
         const { athleteId, status, notes = '' } = req.body;
 
-        if (!['present', 'absent', 'pending'].includes(status)) {
+        if (!['present', 'absent', 'pending', 'called_up'].includes(status)) {
             return res.status(400).json({ error: 'Status non valido' });
+        }
+
+        if (status === 'called_up' && (req.user.role === 'parent' || req.user.role === 'athlete')) {
+            return res.status(403).json({ error: 'Solo lo staff può convocare gli atleti' });
         }
 
         // Verifica accesso all'atleta
@@ -411,6 +539,140 @@ router.post('/:eventId/attendance', async (req, res) => {
     } catch (error) {
         console.error('Errore nella segnalazione della presenza:', error);
         res.status(500).json({ error: 'Errore nella segnalazione della presenza' });
+    }
+});
+
+// Convoca in blocco gli atleti di un evento
+router.post('/:eventId/convene', requireRole(['admin', 'coach']), async (req, res) => {
+    try {
+        const { eventId } = req.params;
+        const { athleteIds } = req.body;
+
+        const eventResult = await query(
+            'SELECT id, group_id FROM events WHERE id = $1 AND is_active = true',
+            [eventId]
+        );
+
+        if (eventResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Evento non trovato' });
+        }
+
+        const event = eventResult.rows[0];
+
+        if (!event.group_id) {
+            return res.status(400).json({ error: 'Evento non associato a un gruppo' });
+        }
+
+        // Verifica accesso al gruppo per i coach
+        if (req.user.role === 'coach') {
+            const accessResult = await query(
+                'SELECT 1 FROM staff_group WHERE user_id = $1 AND group_id = $2',
+                [req.user.id, event.group_id]
+            );
+
+            if (accessResult.rows.length === 0) {
+                return res.status(403).json({ error: 'Non puoi convocare atleti per questo gruppo' });
+            }
+        }
+
+        let convenedResult;
+
+        if (Array.isArray(athleteIds) && athleteIds.length > 0) {
+            convenedResult = await query(`
+        INSERT INTO attendance (event_id, athlete_id, status, marked_by, marked_at)
+        SELECT $1, athlete_id, 'called_up', $2, CURRENT_TIMESTAMP
+        FROM UNNEST($3::int[]) AS athlete_id
+        ON CONFLICT (event_id, athlete_id)
+        DO UPDATE SET
+          status = 'called_up',
+          marked_by = EXCLUDED.marked_by,
+          marked_at = EXCLUDED.marked_at
+        WHERE attendance.status = 'pending'
+        RETURNING *
+      `, [eventId, req.user.id, athleteIds]);
+        } else {
+            convenedResult = await query(`
+        INSERT INTO attendance (event_id, athlete_id, status, marked_by, marked_at)
+        SELECT $1, ag.athlete_id, 'called_up', $2, CURRENT_TIMESTAMP
+        FROM athlete_group ag
+        WHERE ag.group_id = $3 AND ag.is_active = true
+        ON CONFLICT (event_id, athlete_id)
+        DO UPDATE SET
+          status = 'called_up',
+          marked_by = EXCLUDED.marked_by,
+          marked_at = EXCLUDED.marked_at
+        WHERE attendance.status = 'pending'
+        RETURNING *
+      `, [eventId, req.user.id, event.group_id]);
+        }
+
+        console.log(`📣 Convocazione: ${convenedResult.rows.length} atleti convocati per evento ${eventId}`);
+
+        res.json({
+            success: true,
+            convened: convenedResult.rows.length
+        });
+
+    } catch (error) {
+        console.error('Errore nella convocazione degli atleti:', error);
+        res.status(500).json({ error: 'Errore nella convocazione degli atleti' });
+    }
+});
+
+// Segna la presenza reale confermata dal coach (indipendente dall'RSVP)
+router.post('/:eventId/actual-attendance', requireRole(['admin', 'coach']), async (req, res) => {
+    try {
+        const { eventId } = req.params;
+        const { athleteId, actualStatus } = req.body;
+
+        if (!['present', 'absent'].includes(actualStatus)) {
+            return res.status(400).json({ error: 'Status non valido' });
+        }
+
+        const eventResult = await query(
+            'SELECT id, group_id FROM events WHERE id = $1 AND is_active = true',
+            [eventId]
+        );
+
+        if (eventResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Evento non trovato' });
+        }
+
+        const event = eventResult.rows[0];
+
+        // Verifica accesso al gruppo per i coach
+        if (req.user.role === 'coach') {
+            const accessResult = await query(
+                'SELECT 1 FROM staff_group WHERE user_id = $1 AND group_id = $2',
+                [req.user.id, event.group_id]
+            );
+
+            if (accessResult.rows.length === 0) {
+                return res.status(403).json({ error: 'Non puoi segnare la presenza per questo gruppo' });
+            }
+        }
+
+        const attendanceResult = await query(`
+      INSERT INTO attendance (event_id, athlete_id, status, actual_status, actual_marked_by, actual_marked_at)
+      VALUES ($1, $2, 'pending', $3, $4, CURRENT_TIMESTAMP)
+      ON CONFLICT (event_id, athlete_id)
+      DO UPDATE SET
+        actual_status = EXCLUDED.actual_status,
+        actual_marked_by = EXCLUDED.actual_marked_by,
+        actual_marked_at = EXCLUDED.actual_marked_at
+      RETURNING *
+    `, [eventId, athleteId, actualStatus, req.user.id]);
+
+        console.log(`🎯 Presenza reale segnata: atleta ${athleteId} -> ${actualStatus} per evento ${eventId}`);
+
+        res.json({
+            success: true,
+            attendance: attendanceResult.rows[0]
+        });
+
+    } catch (error) {
+        console.error('Errore nella segnalazione della presenza reale:', error);
+        res.status(500).json({ error: 'Errore nella segnalazione della presenza reale' });
     }
 });
 

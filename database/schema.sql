@@ -4,7 +4,7 @@
 CREATE TYPE user_role AS ENUM ('admin', 'coach', 'parent', 'athlete');
 CREATE TYPE document_type AS ENUM ('payment', 'medical_certificate', 'other');
 CREATE TYPE event_type AS ENUM ('training', 'match', 'meeting');
-CREATE TYPE attendance_status AS ENUM ('present', 'absent', 'pending');
+CREATE TYPE attendance_status AS ENUM ('present', 'absent', 'pending', 'called_up');
 
 -- Tabella utenti principali
 CREATE TABLE users (
@@ -16,6 +16,8 @@ CREATE TABLE users (
                        role user_role NOT NULL DEFAULT 'parent',
                        avatar_url TEXT,
                        phone VARCHAR(20),
+                       password_hash TEXT,
+                       must_change_password BOOLEAN DEFAULT false,
                        is_active BOOLEAN DEFAULT true,
                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -126,6 +128,7 @@ CREATE TABLE events (
                         created_by INTEGER REFERENCES users(id),
                         is_recurring BOOLEAN DEFAULT false,
                         recurring_pattern JSONB, -- Per gestire ricorrenze
+                        recurring_group_id UUID,
                         is_active BOOLEAN DEFAULT true,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -140,6 +143,9 @@ CREATE TABLE attendance (
                             notes TEXT,
                             marked_by INTEGER REFERENCES users(id),
                             marked_at TIMESTAMP,
+                            actual_status attendance_status,
+                            actual_marked_by INTEGER REFERENCES users(id),
+                            actual_marked_at TIMESTAMP,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             UNIQUE(event_id, athlete_id)
 );

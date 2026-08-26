@@ -1,13 +1,11 @@
-const CACHE_NAME = 'sportclub-manager-v1';
+const CACHE_NAME = 'sportclub-manager-v2';
 const urlsToCache = [
-    '/',
-    '/static/js/bundle.js',
-    '/static/css/main.css',
     '/manifest.json'
 ];
 
 // Install event
 self.addEventListener('install', (event) => {
+    self.skipWaiting();
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then((cache) => {
@@ -16,34 +14,49 @@ self.addEventListener('install', (event) => {
     );
 });
 
+// Activate event: elimina le cache di versioni precedenti
+self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        caches.keys().then((keys) =>
+            Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+        ).then(() => self.clients.claim())
+    );
+});
+
 // Fetch event
+// Navigazioni (index.html) e chiamate API sempre network-first: evita di
+// servire per sempre una index.html/bundle JS vecchi dopo un nuovo deploy.
 self.addEventListener('fetch', (event) => {
+    const { request } = event;
+
+    if (request.method !== 'GET') {
+        return;
+    }
+
+    if (request.mode === 'navigate' || new URL(request.url).pathname.startsWith('/api/')) {
+        event.respondWith(
+            fetch(request).catch(() => caches.match(request))
+        );
+        return;
+    }
+
     event.respondWith(
-        caches.match(event.request)
-            .then((response) => {
-                // Return cached response if found
-                if (response) {
+        caches.match(request).then((cached) => {
+            if (cached) {
+                return cached;
+            }
+
+            return fetch(request).then((response) => {
+                if (!response || response.status !== 200 || response.type !== 'basic') {
                     return response;
                 }
 
-                // Fetch from network
-                return fetch(event.request).then((response) => {
-                    // Check if valid response
-                    if (!response || response.status !== 200 || response.type !== 'basic') {
-                        return response;
-                    }
+                const responseToCache = response.clone();
+                caches.open(CACHE_NAME).then((cache) => cache.put(request, responseToCache));
 
-                    // Clone response
-                    const responseToCache = response.clone();
-
-                    caches.open(CACHE_NAME)
-                        .then((cache) => {
-                            cache.put(event.request, responseToCache);
-                        });
-
-                    return response;
-                });
-            })
+                return response;
+            });
+        })
     );
 });
 

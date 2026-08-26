@@ -11,10 +11,7 @@ import {
     TrendingUp,
     Plus,
     Eye,
-    ArrowRight,
-    Activity,
-    Target,
-    Award
+    ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
@@ -216,7 +213,7 @@ const Dashboard = () => {
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 gap-4 sm:gap-6">
                 <StatCard
                     icon={MessageSquare}
                     label="Notifiche"
@@ -232,45 +229,6 @@ const Dashboard = () => {
                     color="blue"
                     onClick={() => window.location.href = '/calendar'}
                 />
-
-                {(user.role === 'admin' || user.role === 'coach') && (
-                    <StatCard
-                        icon={AlertTriangle}
-                        label="Scadenze"
-                        value={dashboardData.expiringDocuments.length}
-                        color="yellow"
-                        onClick={() => window.location.href = '/documents?filter=expiring'}
-                    />
-                )}
-
-                {user.role === 'parent' && (
-                    <StatCard
-                        icon={Users}
-                        label="I miei atleti"
-                        value={dashboardData.myAthletes.length}
-                        color="green"
-                        onClick={() => window.location.href = '/athletes'}
-                    />
-                )}
-
-                {user.role === 'admin' && (
-                    <StatCard
-                        icon={TrendingUp}
-                        label="Utenti totali"
-                        value={dashboardData.stats.total_users || 0}
-                        color="purple"
-                        onClick={() => window.location.href = '/users'}
-                    />
-                )}
-
-                {(user.role !== 'admin' && user.role !== 'parent') && (
-                    <StatCard
-                        icon={Activity}
-                        label="Attività"
-                        value="12"
-                        color="indigo"
-                    />
-                )}
             </div>
 
             {/* Content Grid */}

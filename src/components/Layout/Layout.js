@@ -13,7 +13,8 @@ import {
     LogOut,
     UserCircle,
     Shield,
-    ChevronDown
+    ChevronDown,
+    ClipboardList
 } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
@@ -62,6 +63,12 @@ const Layout = ({ user, onLogout, children }) => {
             href: '/communications',
             icon: MessageSquare,
             roles: ['admin', 'coach', 'parent', 'athlete']
+        },
+        {
+            name: 'Report Presenze',
+            href: '/reports/attendance',
+            icon: ClipboardList,
+            roles: ['admin', 'coach']
         },
         {
             name: 'Utenti',
@@ -113,7 +120,7 @@ const Layout = ({ user, onLogout, children }) => {
 
             {/* Sidebar */}
             <div className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0
+        fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:fixed lg:inset-y-0 lg:left-0
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
                 <div className="flex items-center justify-between h-20 px-4 border-b border-gray-200">

@@ -46,9 +46,9 @@ router.get('/', async (req, res) => {
         // Conta totale per paginazione
         const countResult = await query(`
       SELECT COUNT(*) as total, COUNT(CASE WHEN is_read = false THEN 1 END) as unread
-      FROM notifications
+      FROM notifications n
       WHERE ${whereClause}
-    `, queryParams.slice(0, -2));
+    `, queryParams);
 
         res.json({
             notifications: notificationsResult.rows,

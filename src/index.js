@@ -15,8 +15,10 @@ root.render(
     </React.StrictMode>
 );
 
-// Registra il service worker per PWA
-registerServiceWorker();
+// Registra il service worker per PWA (solo in produzione, per non cacheare aggressivamente in sviluppo)
+if (process.env.NODE_ENV === 'production') {
+    registerServiceWorker();
+}
 
 // Funzione per inviare metriche di performance a un servizio di analytics
 function sendToAnalytics(metric) {

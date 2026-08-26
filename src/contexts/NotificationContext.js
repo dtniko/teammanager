@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import apiService from '../services/apiService';
 import { useAuth } from './AuthContext';
+import { supabase } from '../services/supabaseClient';
 
 const NotificationContext = createContext();
 
@@ -30,6 +31,61 @@ export const NotificationProvider = ({ children }) => {
             setUnreadCount(0);
         }
     }, [isAuthenticated]);
+
+    // Sottoscrizione realtime alle notifiche
+    useEffect(() => {
+        if (!isAuthenticated || !user?.id) {
+            return;
+        }
+
+        const channel = supabase
+            .channel('notifications-changes')
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'notifications' },
+                (payload) => {
+                    const newNotification = payload.new;
+                    if (newNotification.user_id !== user.id) {
+                        return;
+                    }
+                    addNotification(newNotification);
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'notifications' },
+                (payload) => {
+                    const updatedNotification = payload.new;
+                    if (updatedNotification.user_id !== user.id) {
+                        return;
+                    }
+                    setNotifications(prev =>
+                        prev.map(notification =>
+                            notification.id === updatedNotification.id
+                                ? { ...notification, ...updatedNotification }
+                                : notification
+                        )
+                    );
+                    setUnreadCount(prev => {
+                        const existing = notifications.find(n => n.id === updatedNotification.id);
+                        if (!existing) {
+                            return prev;
+                        }
+                        if (existing.is_read === updatedNotification.is_read) {
+                            return prev;
+                        }
+                        return updatedNotification.is_read
+                            ? Math.max(0, prev - 1)
+                            : prev + 1;
+                    });
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [isAuthenticated, user?.id]);
 
     // Setup push notifications
     const setupPushNotifications = async () => {

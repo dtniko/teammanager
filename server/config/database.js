@@ -3,16 +3,25 @@ const fs = require('fs').promises;
 const path = require('path');
 
 // Configurazione del pool di connessioni PostgreSQL
-const pool = new Pool({
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'sportclub_manager',
-    password: process.env.DB_PASSWORD || 'password',
-    port: process.env.DB_PORT || 5432,
-    max: 20, // Numero massimo di connessioni nel pool
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-});
+// Se DATABASE_URL e' impostata (es. Supabase) ha priorita' sulle variabili singole DB_*
+const pool = process.env.DATABASE_URL
+    ? new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.DB_SSL === 'false' ? false : { rejectUnauthorized: false },
+        max: 20,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+    })
+    : new Pool({
+        user: process.env.DB_USER || 'postgres',
+        host: process.env.DB_HOST || 'localhost',
+        database: process.env.DB_NAME || 'sportclub_manager',
+        password: process.env.DB_PASSWORD || 'password',
+        port: process.env.DB_PORT || 5432,
+        max: 20, // Numero massimo di connessioni nel pool
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 2000,
+    });
 
 // Test della connessione
 const testConnection = async () => {

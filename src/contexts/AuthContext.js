@@ -78,6 +78,36 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    // Login con email e password
+    const login = async (email, password) => {
+        try {
+            setLoading(true);
+
+            const response = await apiService.login(email, password);
+
+            if (response.success) {
+                const { token: newToken, user: userData, mustChangePassword } = response;
+
+                // Salva token e imposta auth
+                localStorage.setItem('sportclub_token', newToken);
+                apiService.setAuthToken(newToken);
+                setToken(newToken);
+                setUser({ ...userData, mustChangePassword: !!mustChangePassword });
+
+                toast.success(`Benvenuto, ${userData.firstName}!`);
+                return { success: true };
+            } else {
+                throw new Error(response.error || 'Errore nel login');
+            }
+        } catch (error) {
+            console.error('Errore nel login:', error);
+            toast.error(error.message || 'Credenziali non valide');
+            return { success: false, error: error.message };
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Logout
     const logout = async () => {
         try {
@@ -117,6 +147,11 @@ export const AuthProvider = ({ children }) => {
             toast.error(error.message || 'Errore nell\'aggiornamento del profilo');
             return { success: false, error: error.message };
         }
+    };
+
+    // Aggiorna il flag mustChangePassword nello stato locale (es. dopo il primo cambio password)
+    const clearMustChangePassword = () => {
+        setUser(prevUser => prevUser ? { ...prevUser, mustChangePassword: false } : prevUser);
     };
 
     // Controlla se l'utente ha un ruolo specifico
@@ -180,8 +215,10 @@ export const AuthProvider = ({ children }) => {
         token,
         loading,
         loginWithGoogle,
+        login,
         logout,
         updateUserProfile,
+        clearMustChangePassword,
         hasRole,
         hasAnyRole,
         canAccess,
