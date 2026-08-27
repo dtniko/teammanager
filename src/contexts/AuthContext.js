@@ -127,24 +127,20 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Logout
+    // Logout — pulisci subito lo stato locale, poi notifica il server in background
     const logout = async () => {
-        try {
-            // Chiamata API per logout (opzionale, per logging)
-            await apiService.logout().catch(() => {
-                // Ignora errori nel logout API
-            });
-        } catch (error) {
-            console.error('Errore nel logout:', error);
-        } finally {
-            // Pulisci sempre i dati locali
-            localStorage.removeItem('sportclub_token');
-            apiService.setAuthToken(null);
-            setToken(null);
-            setUser(null);
-            setOnboardingStatus(null);
-            toast.info('Disconnesso con successo');
-        }
+        // Pulisci immediatamente — non aspettare il server
+        localStorage.removeItem('sportclub_token');
+        apiService.setAuthToken(null);
+        setToken(null);
+        setUser(null);
+        setOnboardingStatus(null);
+        toast.info('Disconnesso con successo');
+
+        // Notifica il server in background (fire-and-forget)
+        apiService.logout().catch((err) => {
+            console.warn('Logout API notifica fallita (ignoring):', err);
+        });
     };
 
     // Aggiorna profilo utente

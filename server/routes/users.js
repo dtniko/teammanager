@@ -35,7 +35,7 @@ router.get('/profile', async (req, res) => {
             user.athletes = athletesResult.rows;
         } else if (user.role === 'athlete') {
             const athleteResult = await query(
-                'SELECT id, first_name, last_name, date_of_birth FROM athletes WHERE user_id = $1 AND is_active = true',
+                'SELECT a.*, u.email as user_email FROM athletes a LEFT JOIN users u ON a.user_id = u.id WHERE a.user_id = $1 AND a.is_active = true',
                 [user.id]
             );
 

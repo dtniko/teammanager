@@ -26,6 +26,7 @@ import Seasons from './components/Seasons/Seasons';
 import AttendanceReport from './components/Reports/AttendanceReport';
 import NotificationsPage from './components/Notifications/NotificationsPage';
 import LoadingSpinner from './components/Common/LoadingSpinner';
+import Profile from './components/Profile/Profile';
 
 // Services
 import { registerServiceWorker } from './utils/serviceWorker';
@@ -122,6 +123,7 @@ function AppRoutes() {
                 <Route path="/reports/attendance" element={(user.role === 'admin' || user.role === 'coach') ? <AttendanceReport /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/pending-approvals" element={(user.role === 'admin' || user.role === 'coach') ? <PendingApprovals /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/profile" element={<Profile />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
         </Layout>

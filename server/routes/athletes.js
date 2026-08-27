@@ -1,6 +1,6 @@
 const express = require('express');
 const { query, getClient } = require('../config/database');
-const { requireRole, canAccessAthlete } = require('../middleware/auth');
+const { requireRole, canAccessAthlete, authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -334,6 +334,142 @@ router.delete('/:athleteId', requireRole(['admin']), async (req, res) => {
     } catch (error) {
         console.error('Errore nella disattivazione dell\'atleta:', error);
         res.status(500).json({ error: 'Errore nella disattivazione dell\'atleta' });
+    }
+});
+
+// Aggiorna i propri dati atleta (per utenti con role athlete)
+router.put('/self', authenticateToken, async (req, res) => {
+    const client = await getClient();
+
+    try {
+        await client.query('BEGIN');
+
+        const userId = req.user.id;
+        const {
+            firstName, lastName, dateOfBirth, fiscalCode, placeOfBirth,
+            address, residenceCity, phone, email, emergencyContactName, emergencyContactPhone
+        } = req.body;
+
+        // Trova l'atleta associato a questo user
+        const athleteResult = await client.query(
+            'SELECT id FROM athletes WHERE user_id = $1 AND is_active = true',
+            [userId]
+        );
+
+        if (athleteResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Profilo atleta non trovato. Prima devi collegare il tuo profilo.' });
+        }
+
+        const athleteId = athleteResult.rows[0].id;
+
+        // Aggiorna i dati dell'atleta
+        const updateResult = await client.query(`
+        UPDATE athletes SET
+          first_name = $1, last_name = $2, date_of_birth = $3, fiscal_code = $4,
+          place_of_birth = $5, address = $6, residence_city = $7, phone = $8, email = $9,
+          emergency_contact_name = $10, emergency_contact_phone = $11,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $12 AND is_active = true
+        RETURNING id, first_name, last_name, date_of_birth, fiscal_code, place_of_birth,
+                  address, residence_city, phone, email,
+                  emergency_contact_name, emergency_contact_phone
+      `, [
+            firstName, lastName, dateOfBirth, fiscalCode, placeOfBirth,
+            address, residenceCity, phone, email,
+            emergencyContactName || null, emergencyContactPhone || null,
+            athleteId
+        ]);
+
+        if (updateResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Profilo atleta non trovato' });
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`✏️ Profilo atleta aggiornato: ${updateResult.rows[0].first_name} ${updateResult.rows[0].last_name}`);
+
+        res.json({
+            success: true,
+            athlete: updateResult.rows[0],
+            message: 'Profilo aggiornato con successo'
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Errore nell\'aggiornamento del profilo atleta:', error);
+        res.status(500).json({ error: 'Errore nell\'aggiornamento del profilo atleta' });
+    } finally {
+        client.release();
+    }
+});
+
+// Aggiorna i dati di un atleta (per genitori con can_edit)
+router.put('/:athleteId/self', authenticateToken, async (req, res) => {
+    const client = await getClient();
+
+    try {
+        await client.query('BEGIN');
+
+        const { athleteId } = req.params;
+        const {
+            firstName, lastName, placeOfBirth,
+            address, residenceCity, phone, email, emergencyContactName, emergencyContactPhone
+        } = req.body;
+
+        // Verifica permessi di modifica solo per i genitori
+        if (req.user.role === 'parent') {
+            const permissionResult = await client.query(
+                'SELECT can_edit FROM parent_athlete WHERE parent_id = $1 AND athlete_id = $2',
+                [req.user.id, athleteId]
+            );
+
+            if (permissionResult.rows.length === 0 || !permissionResult.rows[0].can_edit) {
+                await client.query('ROLLBACK');
+                return res.status(403).json({ error: 'Non hai i permessi per modificare questo atleta' });
+            }
+        }
+
+        // Aggiorna i dati dell'atleta
+        const updateResult = await client.query(`
+        UPDATE athletes SET
+          first_name = $1, last_name = $2, place_of_birth = $3,
+          address = $4, residence_city = $5, phone = $6, email = $7,
+          emergency_contact_name = $8, emergency_contact_phone = $9,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $10 AND is_active = true
+        RETURNING id, first_name, last_name, date_of_birth, fiscal_code, place_of_birth,
+                  address, residence_city, phone, email,
+                  emergency_contact_name, emergency_contact_phone
+      `, [
+            firstName, lastName, placeOfBirth,
+            address, residenceCity, phone, email,
+            emergencyContactName || null, emergencyContactPhone || null,
+            athleteId
+        ]);
+
+        if (updateResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Profilo atleta non trovato' });
+        }
+
+        await client.query('COMMIT');
+
+        console.log(`✏️ Atleta aggiornato da genitore: ${updateResult.rows[0].first_name} ${updateResult.rows[0].last_name}`);
+
+        res.json({
+            success: true,
+            athlete: updateResult.rows[0],
+            message: 'Profilo atleta aggiornato con successo'
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Errore nell\'aggiornamento dell\'atleta:', error);
+        res.status(500).json({ error: 'Errore nell\'aggiornamento dell\'atleta' });
+    } finally {
+        client.release();
     }
 });
 

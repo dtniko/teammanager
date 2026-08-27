@@ -82,6 +82,10 @@ class ApiService {
         return this.client.put('/users/profile', profileData);
     }
 
+    async updateSelfProfile(profileData) {
+        return this.client.put('/athletes/self', profileData);
+    }
+
     async getUsers(params = {}) {
         return this.client.get('/users', { params });
     }
@@ -138,6 +142,10 @@ class ApiService {
 
     async deleteAthlete(athleteId) {
         return this.client.delete(`/athletes/${athleteId}`);
+    }
+
+    async updateParentAthlete(athleteId, data) {
+        return this.client.put(`/athletes/${athleteId}/self`, data);
     }
 
     // === ONBOARDING ENDPOINTS ===

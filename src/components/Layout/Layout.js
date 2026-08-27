@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     Menu,
@@ -27,6 +27,19 @@ const Layout = ({ user, onLogout, children }) => {
     const location = useLocation();
     const navigate = useNavigate();
     const { unreadCount } = useNotifications();
+    const headerRef = useRef(null);
+
+    // Click outside to close dropdowns (no overlay needed)
+    useEffect(() => {
+        const handleClick = (e) => {
+            if (headerRef.current && !headerRef.current.contains(e.target)) {
+                setUserMenuOpen(false);
+                setNotificationsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, []);
 
     // Configurazione menu di navigazione nell'ORDINE CORRETTO
     const navigationItems = [
@@ -218,7 +231,7 @@ const Layout = ({ user, onLogout, children }) => {
             {/* Main Content */}
             <div className="lg:pl-64 flex flex-col min-h-screen">
                 {/* Top Navigation */}
-                <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0 sticky top-0 z-20">
+                <header ref={headerRef} className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0 sticky top-0">
                     <div className="flex items-center justify-between h-20 px-4 sm:px-6 lg:px-8">
                         {/* Mobile menu button */}
                         <button
@@ -300,9 +313,10 @@ const Layout = ({ user, onLogout, children }) => {
                                         </Link>
 
                                         <button
+                                            type="button"
                                             onClick={() => {
-                                                setUserMenuOpen(false);
                                                 onLogout();
+                                                setUserMenuOpen(false);
                                             }}
                                             className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                                         >
@@ -323,17 +337,6 @@ const Layout = ({ user, onLogout, children }) => {
                     </div>
                 </main>
             </div>
-
-            {/* Click outside to close dropdowns */}
-            {(userMenuOpen || notificationsOpen) && (
-                <div
-                    className="fixed inset-0 z-30"
-                    onClick={() => {
-                        setUserMenuOpen(false);
-                        setNotificationsOpen(false);
-                    }}
-                />
-            )}
         </div>
     );
 };
