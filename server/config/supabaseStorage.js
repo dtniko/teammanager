@@ -5,7 +5,11 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.REACT_AP
 
 const supabase = createClient(
     process.env.SUPABASE_URL,
-    serviceKey
+    serviceKey,
+    {
+        auth: { autoRefreshToken: false, persistSession: false },
+        realtime: { transport: { type: 'fetch' } },
+    }
 );
 
 const DOCUMENTS_BUCKET = process.env.SUPABASE_DOCUMENTS_BUCKET || 'documents';
