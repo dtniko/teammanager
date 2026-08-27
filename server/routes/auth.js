@@ -262,6 +262,41 @@ router.get('/verify', async (req, res) => {
 
         const user = userResult.rows[0];
 
+        // Ottieni informazioni aggiuntive in base al ruolo
+        let additionalData = {};
+
+        if (user.role === 'parent') {
+            // Ottieni gli atleti associati al genitore
+            const athletesResult = await query(`
+        SELECT a.id, a.first_name, a.last_name, a.date_of_birth
+        FROM athletes a
+        JOIN parent_athlete pa ON a.id = pa.athlete_id
+        WHERE pa.parent_id = $1 AND a.is_active = true
+      `, [user.id]);
+
+            additionalData.athletes = athletesResult.rows;
+        } else if (user.role === 'athlete') {
+            // Ottieni i dati dell'atleta
+            const athleteResult = await query(
+                'SELECT id, first_name, last_name, date_of_birth FROM athletes WHERE user_id = $1 AND is_active = true',
+                [user.id]
+            );
+
+            if (athleteResult.rows.length > 0) {
+                additionalData.athleteProfile = athleteResult.rows[0];
+            }
+        } else if (user.role === 'coach') {
+            // Ottieni i gruppi gestiti dal coach
+            const groupsResult = await query(`
+        SELECT g.id, g.name, g.description
+        FROM groups g
+        JOIN staff_group sg ON g.id = sg.group_id
+        WHERE sg.user_id = $1 AND g.is_active = true
+      `, [user.id]);
+
+            additionalData.managedGroups = groupsResult.rows;
+        }
+
         res.json({
             valid: true,
             user: {
@@ -269,7 +304,8 @@ router.get('/verify', async (req, res) => {
                 email: user.email,
                 firstName: user.first_name,
                 lastName: user.last_name,
-                role: user.role
+                role: user.role,
+                ...additionalData
             }
         });
 
@@ -322,6 +358,27 @@ router.post('/refresh', async (req, res) => {
             { expiresIn: '7d' }
         );
 
+        // Ottieni informazioni aggiuntive in base al ruolo
+        let additionalData = {};
+
+        if (user.role === 'parent') {
+            const athletesResult = await query(`
+        SELECT a.id, a.first_name, a.last_name, a.date_of_birth
+        FROM athletes a
+        JOIN parent_athlete pa ON a.id = pa.athlete_id
+        WHERE pa.parent_id = $1 AND a.is_active = true
+      `, [user.id]);
+            additionalData.athletes = athletesResult.rows;
+        } else if (user.role === 'athlete') {
+            const athleteResult = await query(
+                'SELECT id, first_name, last_name, date_of_birth FROM athletes WHERE user_id = $1 AND is_active = true',
+                [user.id]
+            );
+            if (athleteResult.rows.length > 0) {
+                additionalData.athleteProfile = athleteResult.rows[0];
+            }
+        }
+
         res.json({
             success: true,
             token: newToken,
@@ -330,7 +387,8 @@ router.post('/refresh', async (req, res) => {
                 email: user.email,
                 firstName: user.first_name,
                 lastName: user.last_name,
-                role: user.role
+                role: user.role,
+                ...additionalData
             }
         });
 

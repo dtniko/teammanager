@@ -272,7 +272,7 @@ const Dashboard = () => {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                        Ciao, {user.firstName}! 👋
+                        Ciao, {user.athleteProfile?.first_name || user.firstName}! 👋
                     </h1>
                     <p className="text-gray-600">
                         Ecco un riepilogo delle tue attività oggi
