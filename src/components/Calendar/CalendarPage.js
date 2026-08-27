@@ -6,7 +6,9 @@ import {
     MapPin,
     Clock,
     Users,
-    X
+    X,
+    ChevronDown,
+    ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import apiService from '../../services/apiService';
@@ -42,6 +44,9 @@ const emptyForm = {
 const CalendarPage = () => {
     const { user } = useAuth();
     const [events, setEvents] = useState([]);
+    const [pastEvents, setPastEvents] = useState([]);
+    const [showPastEvents, setShowPastEvents] = useState(false);
+    const [loadingPast, setLoadingPast] = useState(false);
     const [groups, setGroups] = useState([]);
     const [loading, setLoading] = useState(true);
     const [eventTypeFilter, setEventTypeFilter] = useState('');
@@ -98,6 +103,39 @@ const CalendarPage = () => {
         loadEvents();
     }, [loadEvents]);
 
+    const loadPastEvents = useCallback(async () => {
+        try {
+            setLoadingPast(true);
+
+            const params = {
+                endDate: new Date().toISOString()
+            };
+
+            if (eventTypeFilter) {
+                params.eventType = eventTypeFilter;
+            }
+
+            if (groupFilter) {
+                params.groupId = groupFilter;
+            }
+
+            const response = await apiService.getEvents(params);
+            setPastEvents(response.events || []);
+        } catch (error) {
+            console.error('Errore nel caricamento degli eventi passati:', error);
+            toast.error('Errore nel caricamento degli eventi passati');
+        } finally {
+            setLoadingPast(false);
+        }
+    }, [eventTypeFilter, groupFilter]);
+
+    useEffect(() => {
+        if (canManage && showPastEvents) {
+            loadPastEvents();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showPastEvents, loadPastEvents]);
+
     const groupDateLabel = (dateStr) => {
         const date = parseISO(dateStr);
         if (isToday(date)) return 'Oggi';
@@ -105,7 +143,7 @@ const CalendarPage = () => {
         return format(date, 'EEEE d MMMM yyyy', { locale: it });
     };
 
-    const groupedEvents = events.reduce((acc, event) => {
+    const groupEventsByDay = (list) => list.reduce((acc, event) => {
         const dayKey = format(parseISO(event.start_datetime), 'yyyy-MM-dd');
         if (!acc[dayKey]) {
             acc[dayKey] = [];
@@ -113,6 +151,9 @@ const CalendarPage = () => {
         acc[dayKey].push(event);
         return acc;
     }, {});
+
+    const groupedEvents = groupEventsByDay(events);
+    const groupedPastEvents = groupEventsByDay(pastEvents);
 
     const handleFormChange = (e) => {
         const { name, value } = e.target;
@@ -197,6 +238,66 @@ const CalendarPage = () => {
         );
     };
 
+    const renderEventCard = (event) => (
+        <Link
+            key={event.id}
+            to={`/calendar/${event.id}`}
+            className="block bg-white shadow rounded-lg p-4 hover:shadow-md transition-shadow"
+        >
+            <div className="flex items-start justify-between">
+                <div>
+                    <div className="flex items-center space-x-2">
+                        <h3 className="text-sm font-medium text-gray-900">
+                            {event.title}
+                        </h3>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${EVENT_TYPE_COLORS[event.event_type] || 'bg-gray-100 text-gray-800'}`}>
+                            {EVENT_TYPE_LABELS[event.event_type] || event.event_type}
+                        </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+                        <span className="flex items-center">
+                            <Clock className="h-4 w-4 mr-1" />
+                            {format(parseISO(event.start_datetime), 'HH:mm', { locale: it })} - {format(parseISO(event.end_datetime), 'HH:mm', { locale: it })}
+                        </span>
+                        {event.group_name && (
+                            <span className="flex items-center">
+                                <Users className="h-4 w-4 mr-1" />
+                                {event.group_name}
+                            </span>
+                        )}
+                        {event.location && (
+                            <span className="flex items-center">
+                                <MapPin className="h-4 w-4 mr-1" />
+                                {event.location}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+            {renderAttendanceBadge(event) && (
+                <div className="mt-3">
+                    {renderAttendanceBadge(event)}
+                </div>
+            )}
+        </Link>
+    );
+
+    const renderDayGroups = (grouped, sortDirection = 'asc') => {
+        const dayKeys = Object.keys(grouped).sort();
+        if (sortDirection === 'desc') dayKeys.reverse();
+
+        return dayKeys.map(dayKey => (
+            <div key={dayKey}>
+                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
+                    {groupDateLabel(dayKey)}
+                </h2>
+                <div className="space-y-3">
+                    {grouped[dayKey].map(renderEventCard)}
+                </div>
+            </div>
+        ));
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -267,58 +368,43 @@ const CalendarPage = () => {
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {Object.keys(groupedEvents).sort().map(dayKey => (
-                        <div key={dayKey}>
-                            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
-                                {groupDateLabel(dayKey)}
-                            </h2>
-                            <div className="space-y-3">
-                                {groupedEvents[dayKey].map(event => (
-                                    <Link
-                                        key={event.id}
-                                        to={`/calendar/${event.id}`}
-                                        className="block bg-white shadow rounded-lg p-4 hover:shadow-md transition-shadow"
-                                    >
-                                        <div className="flex items-start justify-between">
-                                            <div>
-                                                <div className="flex items-center space-x-2">
-                                                    <h3 className="text-sm font-medium text-gray-900">
-                                                        {event.title}
-                                                    </h3>
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${EVENT_TYPE_COLORS[event.event_type] || 'bg-gray-100 text-gray-800'}`}>
-                                                        {EVENT_TYPE_LABELS[event.event_type] || event.event_type}
-                                                    </span>
-                                                </div>
-                                                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
-                                                    <span className="flex items-center">
-                                                        <Clock className="h-4 w-4 mr-1" />
-                                                        {format(parseISO(event.start_datetime), 'HH:mm', { locale: it })} - {format(parseISO(event.end_datetime), 'HH:mm', { locale: it })}
-                                                    </span>
-                                                    {event.group_name && (
-                                                        <span className="flex items-center">
-                                                            <Users className="h-4 w-4 mr-1" />
-                                                            {event.group_name}
-                                                        </span>
-                                                    )}
-                                                    {event.location && (
-                                                        <span className="flex items-center">
-                                                            <MapPin className="h-4 w-4 mr-1" />
-                                                            {event.location}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        {renderAttendanceBadge(event) && (
-                                            <div className="mt-3">
-                                                {renderAttendanceBadge(event)}
-                                            </div>
-                                        )}
-                                    </Link>
-                                ))}
-                            </div>
+                    {renderDayGroups(groupedEvents, 'asc')}
+                </div>
+            )}
+
+            {/* Past Events (solo admin/coach, collassato di default) */}
+            {canManage && (
+                <div className="bg-white shadow rounded-lg overflow-hidden">
+                    <button
+                        onClick={() => setShowPastEvents(prev => !prev)}
+                        className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50"
+                    >
+                        <span className="text-sm font-semibold text-gray-700 flex items-center">
+                            {showPastEvents ? (
+                                <ChevronDown className="h-4 w-4 mr-2 text-gray-400" />
+                            ) : (
+                                <ChevronRight className="h-4 w-4 mr-2 text-gray-400" />
+                            )}
+                            Eventi passati
+                        </span>
+                        <span className="text-xs text-gray-400">
+                            Modificabili solo da admin/coach
+                        </span>
+                    </button>
+
+                    {showPastEvents && (
+                        <div className="p-4 border-t border-gray-200 space-y-6">
+                            {loadingPast ? (
+                                <LoadingSpinner size="medium" text="Caricamento eventi passati..." />
+                            ) : Object.keys(groupedPastEvents).length === 0 ? (
+                                <p className="text-sm text-gray-500 text-center py-4">
+                                    Nessun evento passato trovato
+                                </p>
+                            ) : (
+                                renderDayGroups(groupedPastEvents, 'desc')
+                            )}
                         </div>
-                    ))}
+                    )}
                 </div>
             )}
 

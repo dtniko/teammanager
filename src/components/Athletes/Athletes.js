@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
     Users,
@@ -143,6 +143,10 @@ const Athletes = () => {
         }
     };
 
+    const sortedAthletes = useMemo(() => {
+        return [...athletes].sort((a, b) => new Date(a.date_of_birth) - new Date(b.date_of_birth));
+    }, [athletes]);
+
     const canCreateAthlete = user.role === 'admin' || user.role === 'coach';
     const canEditAthlete = user.role === 'admin' || user.role === 'coach';
 
@@ -280,6 +284,9 @@ const Athletes = () => {
                                 <thead className="bg-gray-50">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        #
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Atleta
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -300,8 +307,11 @@ const Athletes = () => {
                                 </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                {athletes.map((athlete) => (
+                                {sortedAthletes.map((athlete, index) => (
                                     <tr key={athlete.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            {index + 1}
+                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="flex items-center">
                                                 <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -397,10 +407,13 @@ const Athletes = () => {
 
                         {/* Mobile Cards */}
                         <div className="lg:hidden space-y-4 p-4">
-                            {athletes.map((athlete) => (
+                            {sortedAthletes.map((athlete, index) => (
                                 <div key={athlete.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center space-x-3">
+                                            <span className="text-xs font-medium text-gray-400 w-5 text-right">
+                                                {index + 1}
+                                            </span>
                                             <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center">
                         <span className="text-blue-600 font-medium">
                           {athlete.first_name.charAt(0)}{athlete.last_name.charAt(0)}

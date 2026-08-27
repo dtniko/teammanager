@@ -51,11 +51,6 @@ const ACTUAL_STATUS_LABELS = {
     absent: 'Assente'
 };
 
-const ACTUAL_STATUS_COLORS = {
-    present: 'bg-green-100 text-green-800',
-    absent: 'bg-red-100 text-red-800'
-};
-
 const EventDetail = () => {
     const { eventId } = useParams();
     const navigate = useNavigate();
@@ -398,57 +393,32 @@ const EventDetail = () => {
                     ) : (
                         <div className="divide-y divide-gray-200">
                             {event.attendance.map(row => (
-                                <div key={row.id} className="p-4 space-y-3">
-                                    <p className="text-sm font-medium text-gray-900">
-                                        {row.first_name} {row.last_name}
-                                    </p>
-                                    {row.notes && (
-                                        <p className="text-xs text-gray-500 -mt-2">{row.notes}</p>
-                                    )}
-
-                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                        {/* RSVP block */}
-                                        <div className="flex items-center justify-between sm:justify-start sm:space-x-3">
-                                            <span className="text-xs text-gray-500 mr-2">Risposta convocazione</span>
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[row.status]}`}>
-                                                {STATUS_LABELS[row.status]}
-                                            </span>
-                                            <select
-                                                value={row.status}
-                                                onChange={(e) => handleMarkAttendance(row.athlete_id, e.target.value)}
-                                                className="text-sm border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                            >
-                                                <option value="pending">In attesa</option>
-                                                <option value="called_up">Convocato</option>
-                                                <option value="present">Presente</option>
-                                                <option value="absent">Assente</option>
-                                            </select>
-                                        </div>
-
-                                        {/* Actual attendance block */}
-                                        <div className="flex items-center justify-between sm:justify-start sm:space-x-3 bg-gray-50 rounded-md px-3 py-2 sm:bg-transparent sm:px-0 sm:py-0">
-                                            <span className="text-xs text-gray-500 mr-2">Presenza reale</span>
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${row.actual_status ? ACTUAL_STATUS_COLORS[row.actual_status] : 'bg-gray-100 text-gray-800'}`}>
-                                                {row.actual_status ? ACTUAL_STATUS_LABELS[row.actual_status] : 'Da confermare'}
-                                            </span>
-                                            <div className="flex items-center space-x-2">
-                                                <button
-                                                    onClick={() => handleMarkActualAttendance(row.athlete_id, 'present')}
-                                                    className="px-2 py-1 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-md hover:bg-green-100"
-                                                    title="Segna presente"
-                                                >
-                                                    ✅ Presente
-                                                </button>
-                                                <button
-                                                    onClick={() => handleMarkActualAttendance(row.athlete_id, 'absent')}
-                                                    className="px-2 py-1 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-md hover:bg-red-100"
-                                                    title="Segna assente"
-                                                >
-                                                    ❌ Assente
-                                                </button>
-                                            </div>
-                                        </div>
+                                <div key={row.id} className="px-4 py-2 flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium text-gray-900 truncate">
+                                            {row.first_name} {row.last_name}
+                                        </p>
+                                        {row.notes && (
+                                            <p className="text-xs text-gray-500 truncate">{row.notes}</p>
+                                        )}
                                     </div>
+                                    <button
+                                        onClick={() => handleMarkActualAttendance(row.athlete_id, row.actual_status === 'present' ? 'absent' : 'present')}
+                                        title={row.actual_status ? ACTUAL_STATUS_LABELS[row.actual_status] : 'Da confermare — clicca per segnare presente'}
+                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${
+                                            row.actual_status === 'present'
+                                                ? 'bg-green-500'
+                                                : row.actual_status === 'absent'
+                                                    ? 'bg-red-500'
+                                                    : 'bg-gray-300'
+                                        }`}
+                                    >
+                                        <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                                                row.actual_status === 'present' ? 'translate-x-6' : 'translate-x-1'
+                                            }`}
+                                        />
+                                    </button>
                                 </div>
                             ))}
                         </div>
