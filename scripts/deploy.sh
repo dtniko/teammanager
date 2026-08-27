@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# SportClub Manager - Script di Deployment
+# Sport Manager - Script di Deployment
 # Versione: 1.0.0
 # Descrizione: Script per automatizzare il deployment dell'applicazione
 
@@ -238,7 +238,7 @@ show_status() {
 
 # Menu principale
 show_menu() {
-    echo "SportClub Manager - Script di Deployment"
+    echo "Sport Manager - Script di Deployment"
     echo "========================================"
     echo "1) Deploy completo"
     echo "2) Solo build"

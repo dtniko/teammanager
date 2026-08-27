@@ -254,7 +254,7 @@ class SchedulerService {
 
             const stats = weeklyStatsResult.rows[0];
 
-            const title = '📊 Report Settimanale SportClub Manager';
+            const title = '📊 Report Settimanale Sport Manager';
             const message = `
 Settimana del ${new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('it-IT')} - ${new Date().toLocaleDateString('it-IT')}
 

@@ -1,4 +1,4 @@
--- Schema del database per SportClub Manager
+-- Schema del database per Sport Manager
 
 -- Tipologie di utenti
 CREATE TYPE user_role AS ENUM ('admin', 'coach', 'parent', 'athlete');
@@ -27,8 +27,8 @@ CREATE TABLE users (
 CREATE TABLE seasons (
                          id SERIAL PRIMARY KEY,
                          name VARCHAR(100) NOT NULL,
-                         start_date DATE NOT NULL,
-                         end_date DATE NOT NULL,
+                         start_date DATE,
+                         end_date DATE,
                          is_current BOOLEAN DEFAULT false,
                          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -53,6 +53,7 @@ CREATE TABLE athletes (
                           fiscal_code VARCHAR(16),
                           place_of_birth VARCHAR(100),
                           address TEXT,
+                          residence_city VARCHAR(100),
                           phone VARCHAR(20),
                           email VARCHAR(255),
                           emergency_contact_name VARCHAR(200),
@@ -236,3 +237,32 @@ CREATE TRIGGER update_athletes_updated_at BEFORE UPDATE ON athletes
 
 CREATE TRIGGER update_events_updated_at BEFORE UPDATE ON events
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Richieste di collegamento account -> profilo atleta (onboarding)
+CREATE TABLE profile_link_requests (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  athlete_id INTEGER NOT NULL REFERENCES athletes(id) ON DELETE CASCADE,
+  context VARCHAR(10) NOT NULL CHECK (context IN ('athlete','parent')),
+  relationship VARCHAR(20),
+  status VARCHAR(10) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+  reviewed_by INTEGER REFERENCES users(id),
+  reviewed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_profile_link_requests_user_id ON profile_link_requests(user_id);
+CREATE INDEX idx_profile_link_requests_status ON profile_link_requests(status);
+
+-- Subscription Web Push (VAPID) per notifiche a tab/app chiusa
+CREATE TABLE push_subscriptions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_push_subscriptions_user_id ON push_subscriptions(user_id);

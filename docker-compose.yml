@@ -1,21 +1,5 @@
 services:
-  # Database PostgreSQL
-  postgres:
-    image: postgres:15-alpine
-    container_name: sportclub-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${DB_NAME:-sportclub_manager}
-      POSTGRES_USER: ${DB_USER:-sportclub_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - sportclub_network
-
-  # Applicazione SportClub Manager
+  # Applicazione Sport Manager
   app:
     build:
       context: .
@@ -24,28 +8,22 @@ services:
     container_name: sportclub-app
     restart: unless-stopped
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-sportclub_manager}
-      DB_USER: ${DB_USER:-sportclub_user}
-      DB_PASSWORD: ${DB_PASSWORD:-password}
+      DATABASE_URL: ${DATABASE_URL}
       NODE_ENV: production
       PORT: 5000
       JWT_SECRET: ${JWT_SECRET:-your_super_secure_jwt_secret_key_minimum_32_characters_long}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-your_google_client_id}
       FRONTEND_URL: http://localhost:8000
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_DOCUMENTS_BUCKET: ${SUPABASE_DOCUMENTS_BUCKET:-documents}
     volumes:
       - .:/app
       - /app/node_modules
     ports:
       - "8000:5000"
-    depends_on:
-      - postgres
     networks:
       - sportclub_network
-
-volumes:
-  postgres_data:
 
 networks:
   sportclub_network:

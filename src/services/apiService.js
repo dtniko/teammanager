@@ -140,6 +140,36 @@ class ApiService {
         return this.client.delete(`/athletes/${athleteId}`);
     }
 
+    // === ONBOARDING ENDPOINTS ===
+
+    async getOnboardingStatus() {
+        return this.client.get('/onboarding/status');
+    }
+
+    async getAvailableAthletes(context, search = '') {
+        return this.client.get('/onboarding/available-athletes', { params: { context, search } });
+    }
+
+    async linkExistingProfile(athleteId, context, relationship) {
+        return this.client.post('/onboarding/link-existing', { athleteId, context, relationship });
+    }
+
+    async createOnboardingProfile(context, relationship, athleteData) {
+        return this.client.post('/onboarding/create-profile', { context, relationship, athleteData });
+    }
+
+    async getPendingOnboardingRequests() {
+        return this.client.get('/onboarding/pending-requests');
+    }
+
+    async approveOnboardingRequest(requestId) {
+        return this.client.post(`/onboarding/requests/${requestId}/approve`);
+    }
+
+    async rejectOnboardingRequest(requestId, reason) {
+        return this.client.post(`/onboarding/requests/${requestId}/reject`, { reason });
+    }
+
     // === GROUP ENDPOINTS ===
 
     async getGroups(params = {}) {
@@ -176,6 +206,24 @@ class ApiService {
 
     async removeStaffFromGroup(groupId, userId) {
         return this.client.delete(`/groups/${groupId}/staff/${userId}`);
+    }
+
+    // === SEASON ENDPOINTS ===
+
+    async getSeasons() {
+        return this.client.get('/seasons');
+    }
+
+    async createSeason(seasonData) {
+        return this.client.post('/seasons', seasonData);
+    }
+
+    async setCurrentSeason(seasonId) {
+        return this.client.patch(`/seasons/${seasonId}/set-current`);
+    }
+
+    async updateSeason(seasonId, seasonData) {
+        return this.client.patch(`/seasons/${seasonId}`, seasonData);
     }
 
     // === EVENT ENDPOINTS ===
@@ -306,6 +354,14 @@ class ApiService {
 
     async sendSystemNotification(notificationData) {
         return this.client.post('/notifications/system', notificationData);
+    }
+
+    async savePushSubscription(subscription) {
+        return this.client.post('/notifications/push-subscribe', subscription.toJSON());
+    }
+
+    async deletePushSubscription(endpoint) {
+        return this.client.delete('/notifications/push-subscribe', { data: { endpoint } });
     }
 
     // === UTILITY METHODS ===

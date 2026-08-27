@@ -11,6 +11,8 @@ const eventRoutes = require('./routes/events');
 const documentRoutes = require('./routes/documents');
 const communicationRoutes = require('./routes/communications');
 const { router: notificationRoutes } = require('./routes/notifications');
+const onboardingRoutes = require('./routes/onboarding');
+const seasonRoutes = require('./routes/seasons');
 
 const { authenticateToken } = require('./middleware/auth');
 const { initializeDatabase } = require('./config/database');
@@ -41,6 +43,8 @@ app.use('/api/events', authenticateToken, eventRoutes);
 app.use('/api/documents', authenticateToken, documentRoutes);
 app.use('/api/communications', authenticateToken, communicationRoutes);
 app.use('/api/notifications', authenticateToken, notificationRoutes);
+app.use('/api/onboarding', authenticateToken, onboardingRoutes);
+app.use('/api/seasons', authenticateToken, seasonRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -62,7 +66,7 @@ if (process.env.NODE_ENV === 'production') {
     // In development, React dev server handles the frontend
     app.get('/', (req, res) => {
         res.json({
-            message: 'SportClub Manager API Server',
+            message: 'Sport Manager API Server',
             mode: 'development',
             frontend: 'http://localhost:3000'
         });

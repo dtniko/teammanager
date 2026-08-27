@@ -175,7 +175,7 @@ router.post('/', requireRole(['admin', 'coach']), async (req, res) => {
 
         const {
             firstName, lastName, dateOfBirth, fiscalCode, placeOfBirth,
-            address, phone, email, emergencyContactName, emergencyContactPhone,
+            address, residenceCity, phone, email, emergencyContactName, emergencyContactPhone,
             parentEmails = [], groupIds = []
         } = req.body;
 
@@ -190,12 +190,12 @@ router.post('/', requireRole(['admin', 'coach']), async (req, res) => {
         const athleteResult = await client.query(`
       INSERT INTO athletes (
         first_name, last_name, date_of_birth, fiscal_code, place_of_birth,
-        address, phone, email, emergency_contact_name, emergency_contact_phone
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        address, residence_city, phone, email, emergency_contact_name, emergency_contact_phone
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `, [
             firstName, lastName, dateOfBirth, fiscalCode, placeOfBirth,
-            address, phone, email, emergencyContactName, emergencyContactPhone
+            address, residenceCity, phone, email, emergencyContactName, emergencyContactPhone
         ]);
 
         const athlete = athleteResult.rows[0];
@@ -258,7 +258,7 @@ router.put('/:athleteId', canAccessAthlete, async (req, res) => {
         const { athleteId } = req.params;
         const {
             firstName, lastName, dateOfBirth, fiscalCode, placeOfBirth,
-            address, phone, email, emergencyContactName, emergencyContactPhone
+            address, residenceCity, phone, email, emergencyContactName, emergencyContactPhone
         } = req.body;
 
         // Verifica permessi di modifica per i genitori
@@ -276,14 +276,14 @@ router.put('/:athleteId', canAccessAthlete, async (req, res) => {
         const updateResult = await client.query(`
       UPDATE athletes SET
         first_name = $1, last_name = $2, date_of_birth = $3, fiscal_code = $4,
-        place_of_birth = $5, address = $6, phone = $7, email = $8,
-        emergency_contact_name = $9, emergency_contact_phone = $10,
+        place_of_birth = $5, address = $6, residence_city = $7, phone = $8, email = $9,
+        emergency_contact_name = $10, emergency_contact_phone = $11,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $11
+      WHERE id = $12
       RETURNING *
     `, [
             firstName, lastName, dateOfBirth, fiscalCode, placeOfBirth,
-            address, phone, email, emergencyContactName, emergencyContactPhone,
+            address, residenceCity, phone, email, emergencyContactName, emergencyContactPhone,
             athleteId
         ]);
 

@@ -11,6 +11,8 @@ import { NotificationProvider } from './contexts/NotificationContext';
 import Layout from './components/Layout/Layout';
 import Login from './components/Auth/Login';
 import ChangePassword from './components/Auth/ChangePassword';
+import LinkProfile from './components/Onboarding/LinkProfile';
+import PendingApprovals from './components/Onboarding/PendingApprovals';
 import Dashboard from './components/Dashboard/Dashboard';
 import Athletes from './components/Athletes/Athletes';
 import AthleteDetail from './components/Athletes/AthleteDetail';
@@ -20,7 +22,9 @@ import EventDetail from './components/Calendar/EventDetail';
 import Users from './components/Users/Users';
 import Groups from './components/Groups/Groups';
 import GroupDetail from './components/Groups/GroupDetail';
+import Seasons from './components/Seasons/Seasons';
 import AttendanceReport from './components/Reports/AttendanceReport';
+import NotificationsPage from './components/Notifications/NotificationsPage';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 
 // Services
@@ -59,7 +63,7 @@ function App() {
 }
 
 function AppRoutes() {
-    const { user, loading, logout } = useAuth();
+    const { user, loading, logout, onboardingStatus } = useAuth();
     const location = useLocation();
 
     if (loading) {
@@ -87,6 +91,19 @@ function AppRoutes() {
         return <ChangePassword />;
     }
 
+    // Forza il collegamento a un profilo atleta prima di qualsiasi altra pagina
+    if (onboardingStatus?.needsOnboarding && location.pathname !== '/link-profile') {
+        return <Navigate to="/link-profile" replace />;
+    }
+
+    if (!onboardingStatus?.needsOnboarding && location.pathname === '/link-profile') {
+        return <Navigate to="/dashboard" replace />;
+    }
+
+    if (onboardingStatus?.needsOnboarding) {
+        return <LinkProfile />;
+    }
+
     return (
         <Layout user={user} onLogout={logout}>
             <Routes>
@@ -101,7 +118,10 @@ function AppRoutes() {
                 <Route path="/users" element={user.role === 'admin' ? <Users /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/groups" element={(user.role === 'admin' || user.role === 'coach') ? <Groups /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/groups/:groupId" element={(user.role === 'admin' || user.role === 'coach') ? <GroupDetail /> : <Navigate to="/dashboard" replace />} />
+                <Route path="/seasons" element={(user.role === 'admin' || user.role === 'coach') ? <Seasons /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/reports/attendance" element={(user.role === 'admin' || user.role === 'coach') ? <AttendanceReport /> : <Navigate to="/dashboard" replace />} />
+                <Route path="/pending-approvals" element={(user.role === 'admin' || user.role === 'coach') ? <PendingApprovals /> : <Navigate to="/dashboard" replace />} />
+                <Route path="/notifications" element={<NotificationsPage />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
         </Layout>

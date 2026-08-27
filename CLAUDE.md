@@ -1,4 +1,4 @@
-# SportClub Manager — note di progetto
+# Sport Manager — note di progetto
 
 ## Architettura deploy
 App monolitica: un solo container Express serve sia le API (`/api/*`) sia i

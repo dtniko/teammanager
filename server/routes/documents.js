@@ -1,31 +1,14 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const { query, getClient } = require('../config/database');
 const { requireRole, canAccessAthlete } = require('../middleware/auth');
+const { supabase, DOCUMENTS_BUCKET } = require('../config/supabaseStorage');
 
 const router = express.Router();
 
-// Configurazione multer per upload documenti
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadPath = path.join(__dirname, '../uploads/documents');
-
-        // Crea la directory se non esiste
-        if (!fs.existsSync(uploadPath)) {
-            fs.mkdirSync(uploadPath, { recursive: true });
-        }
-
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        // Genera nome file unico
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const extension = path.extname(file.originalname);
-        cb(null, `doc-${uniqueSuffix}${extension}`);
-    }
-});
+// Configurazione multer per upload documenti (in memoria, poi caricati su Supabase Storage)
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
     // Tipi di file accettati
@@ -130,8 +113,6 @@ router.post('/upload', upload.single('document'), async (req, res) => {
 
         // Validazione
         if (!athleteId || !documentType || !title) {
-            // Elimina il file se la validazione fallisce
-            fs.unlinkSync(req.file.path);
             return res.status(400).json({
                 error: 'Atleta, tipo documento e titolo sono obbligatori'
             });
@@ -157,7 +138,6 @@ router.post('/upload', upload.single('document'), async (req, res) => {
         }
 
         if (!canUpload) {
-            fs.unlinkSync(req.file.path);
             return res.status(403).json({ error: 'Non puoi caricare documenti per questo atleta' });
         }
 
@@ -172,6 +152,21 @@ router.post('/upload', upload.single('document'), async (req, res) => {
             }
         }
 
+        // Carica il file su Supabase Storage
+        const extension = path.extname(req.file.originalname);
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const storageKey = `athlete-${athleteId}/${uniqueSuffix}${extension}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from(DOCUMENTS_BUCKET)
+            .upload(storageKey, req.file.buffer, { contentType: req.file.mimetype });
+
+        if (uploadError) {
+            await client.query('ROLLBACK');
+            console.error('Errore nel caricamento del file su Supabase Storage:', uploadError);
+            return res.status(500).json({ error: 'Errore nel caricamento del documento' });
+        }
+
         // Salva il documento nel database
         const documentResult = await client.query(`
       INSERT INTO documents (
@@ -180,7 +175,7 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `, [
-            athleteId, finalSeasonId, documentType, title, req.file.filename, req.file.path,
+            athleteId, finalSeasonId, documentType, title, req.file.originalname, storageKey,
             req.file.size, req.file.mimetype, expiryDate || null, notes, req.user.id
         ]);
 
@@ -196,11 +191,6 @@ router.post('/upload', upload.single('document'), async (req, res) => {
 
     } catch (error) {
         await client.query('ROLLBACK');
-
-        // Elimina il file in caso di errore
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
 
         console.error('Errore nel caricamento del documento:', error);
         res.status(500).json({ error: 'Errore nel caricamento del documento' });
@@ -250,8 +240,13 @@ router.get('/download/:documentId', async (req, res) => {
             return res.status(403).json({ error: 'Non puoi scaricare questo documento' });
         }
 
-        // Verifica che il file esista
-        if (!fs.existsSync(document.file_path)) {
+        // Scarica il file da Supabase Storage
+        const { data, error: downloadError } = await supabase.storage
+            .from(DOCUMENTS_BUCKET)
+            .download(document.file_path);
+
+        if (downloadError || !data) {
+            console.error('Errore nel download da Supabase Storage:', downloadError);
             return res.status(404).json({ error: 'File non trovato sul server' });
         }
 
@@ -260,7 +255,7 @@ router.get('/download/:documentId', async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename="${document.title}"`);
 
         // Invia il file
-        res.sendFile(path.resolve(document.file_path));
+        res.send(Buffer.from(await data.arrayBuffer()));
 
     } catch (error) {
         console.error('Errore nel download del documento:', error);
@@ -316,12 +311,19 @@ router.delete('/:documentId', async (req, res) => {
         // Elimina dal database
         await client.query('DELETE FROM documents WHERE id = $1', [documentId]);
 
-        // Elimina il file fisico
-        if (fs.existsSync(document.file_path)) {
-            fs.unlinkSync(document.file_path);
-        }
-
         await client.query('COMMIT');
+
+        // Elimina il file da Supabase Storage (non blocca la cancellazione se fallisce)
+        try {
+            const { error: removeError } = await supabase.storage
+                .from(DOCUMENTS_BUCKET)
+                .remove([document.file_path]);
+            if (removeError) {
+                console.error('Errore nella rimozione del file da Supabase Storage:', removeError);
+            }
+        } catch (storageError) {
+            console.error('Errore nella rimozione del file da Supabase Storage:', storageError);
+        }
 
         console.log(`🗑️ Documento eliminato: ${document.title}`);
 

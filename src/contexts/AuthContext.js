@@ -16,13 +16,14 @@ export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [token, setToken] = useState(localStorage.getItem('sportclub_token'));
+    const [onboardingStatus, setOnboardingStatus] = useState(null);
 
     // Inizializza autenticazione
     useEffect(() => {
         initializeAuth();
     }, []);
 
-    const initializeAuth = async () => {
+    const initializeAuth = async (retryOnNetworkError = true) => {
         const storedToken = localStorage.getItem('sportclub_token');
 
         if (storedToken) {
@@ -33,15 +34,39 @@ export const AuthProvider = ({ children }) => {
                 if (response.valid) {
                     setUser(response.user);
                     setToken(storedToken);
+                    fetchOnboardingStatus();
                 } else {
-                    // Token non valido
+                    // Token non valido: il server ha risposto ma la sessione non è valida
                     localStorage.removeItem('sportclub_token');
                     apiService.setAuthToken(null);
                 }
             } catch (error) {
                 console.error('Errore nella verifica del token:', error);
-                localStorage.removeItem('sportclub_token');
-                apiService.setAuthToken(null);
+
+                // L'interceptor di apiService già gestisce il caso "token rifiutato dal
+                // server" (401), disconnettendo l'utente. Qui arriviamo tipicamente per
+                // errori di connettività (server irraggiungibile, riavvio in dev, timeout):
+                // in quel caso NON disconnettere l'utente, altrimenti la sessione salta
+                // ad ogni blip di rete pur restando sulla stessa pagina (es. /dashboard).
+                const isNetworkError = !!(error && (
+                    error.request ||
+                    error.code === 'ERR_NETWORK' ||
+                    error.code === 'ECONNABORTED' ||
+                    error.message === 'Network Error'
+                ));
+
+                if (!isNetworkError) {
+                    localStorage.removeItem('sportclub_token');
+                    apiService.setAuthToken(null);
+                } else if (retryOnNetworkError) {
+                    // Un solo retry automatico dopo un breve delay: se il blip era
+                    // transitorio (es. dev server che si riavvia) la sessione si
+                    // ripristina da sola senza bisogno di un refresh manuale.
+                    setTimeout(() => initializeAuth(false), 1500);
+                    return;
+                } else {
+                    setToken(storedToken);
+                }
             }
         }
 
@@ -51,8 +76,6 @@ export const AuthProvider = ({ children }) => {
     // Login con Google
     const loginWithGoogle = async (googleToken) => {
         try {
-            setLoading(true);
-
             const response = await apiService.loginWithGoogle(googleToken);
 
             if (response.success) {
@@ -63,6 +86,7 @@ export const AuthProvider = ({ children }) => {
                 apiService.setAuthToken(newToken);
                 setToken(newToken);
                 setUser(userData);
+                fetchOnboardingStatus();
 
                 toast.success(`Benvenuto, ${userData.firstName}!`);
                 return { success: true };
@@ -73,16 +97,12 @@ export const AuthProvider = ({ children }) => {
             console.error('Errore nel login:', error);
             toast.error(error.message || 'Errore nel login con Google');
             return { success: false, error: error.message };
-        } finally {
-            setLoading(false);
         }
     };
 
     // Login con email e password
     const login = async (email, password) => {
         try {
-            setLoading(true);
-
             const response = await apiService.login(email, password);
 
             if (response.success) {
@@ -93,6 +113,7 @@ export const AuthProvider = ({ children }) => {
                 apiService.setAuthToken(newToken);
                 setToken(newToken);
                 setUser({ ...userData, mustChangePassword: !!mustChangePassword });
+                fetchOnboardingStatus();
 
                 toast.success(`Benvenuto, ${userData.firstName}!`);
                 return { success: true };
@@ -103,8 +124,6 @@ export const AuthProvider = ({ children }) => {
             console.error('Errore nel login:', error);
             toast.error(error.message || 'Credenziali non valide');
             return { success: false, error: error.message };
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -123,6 +142,7 @@ export const AuthProvider = ({ children }) => {
             apiService.setAuthToken(null);
             setToken(null);
             setUser(null);
+            setOnboardingStatus(null);
             toast.info('Disconnesso con successo');
         }
     };
@@ -153,6 +173,21 @@ export const AuthProvider = ({ children }) => {
     const clearMustChangePassword = () => {
         setUser(prevUser => prevUser ? { ...prevUser, mustChangePassword: false } : prevUser);
     };
+
+    // Recupera lo stato di onboarding (collegamento profilo atleta) dell'utente corrente
+    const fetchOnboardingStatus = async () => {
+        try {
+            const response = await apiService.getOnboardingStatus();
+            setOnboardingStatus(response);
+            return response;
+        } catch (error) {
+            console.error('Errore nel recupero dello stato di onboarding:', error);
+            return null;
+        }
+    };
+
+    // Da richiamare dopo ogni azione di onboarding (collega/crea profilo) per aggiornare lo stato
+    const refreshOnboardingStatus = () => fetchOnboardingStatus();
 
     // Controlla se l'utente ha un ruolo specifico
     const hasRole = (role) => {
@@ -219,6 +254,8 @@ export const AuthProvider = ({ children }) => {
         logout,
         updateUserProfile,
         clearMustChangePassword,
+        onboardingStatus,
+        refreshOnboardingStatus,
         hasRole,
         hasAnyRole,
         canAccess,

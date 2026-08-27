@@ -20,6 +20,27 @@ import LoadingSpinner, { CardSkeleton } from '../Common/LoadingSpinner';
 import { format, isToday, isTomorrow, addDays } from 'date-fns';
 import { it } from 'date-fns/locale';
 
+const ATTENDANCE_STATUS_LABELS = {
+    pending: 'Presenza da confermare',
+    called_up: 'Presenza da confermare',
+    present: 'Presenza confermata',
+    absent: 'Assenza segnalata'
+};
+
+const ATTENDANCE_STATUS_COLORS = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    called_up: 'bg-yellow-100 text-yellow-800',
+    present: 'bg-green-100 text-green-800',
+    absent: 'bg-red-100 text-red-800'
+};
+
+const DASHBOARD_RANGE_OPTIONS = [
+    { value: '7', label: 'Settimana' },
+    { value: '14', label: '2 Settimane' },
+    { value: '30', label: 'Mese' },
+    { value: 'all', label: 'Tutti' }
+];
+
 const Dashboard = () => {
     const { user } = useAuth();
     const { unreadCount } = useNotifications();
@@ -27,14 +48,91 @@ const Dashboard = () => {
     const [dashboardData, setDashboardData] = useState({
         stats: {},
         upcomingEvents: [],
-        recentCommunications: [],
         expiringDocuments: [],
         myAthletes: []
     });
+    const eventsRangeStorageKey = user ? `dashboard_events_range_${user.id}` : null;
+    const [eventsRange, setEventsRange] = useState(() => {
+        if (!user) return '7';
+        return localStorage.getItem(`dashboard_events_range_${user.id}`) || '7';
+    });
+    const [listEvents, setListEvents] = useState([]);
+    const [listEventsLoading, setListEventsLoading] = useState(false);
+
+    const commsRangeStorageKey = user ? `dashboard_comms_range_${user.id}` : null;
+    const [commsRange, setCommsRange] = useState(() => {
+        if (!user) return '7';
+        return localStorage.getItem(`dashboard_comms_range_${user.id}`) || '7';
+    });
+    const [listComms, setListComms] = useState([]);
+    const [listCommsLoading, setListCommsLoading] = useState(true);
 
     useEffect(() => {
         loadDashboardData();
     }, [user]);
+
+    useEffect(() => {
+        if (eventsRange === '7') return;
+        loadListEvents(eventsRange);
+    }, [eventsRange]);
+
+    useEffect(() => {
+        loadListComms(commsRange);
+    }, [commsRange, user]);
+
+    const handleEventsRangeChange = (range) => {
+        setEventsRange(range);
+        if (eventsRangeStorageKey) {
+            localStorage.setItem(eventsRangeStorageKey, range);
+        }
+    };
+
+    const handleCommsRangeChange = (range) => {
+        setCommsRange(range);
+        if (commsRangeStorageKey) {
+            localStorage.setItem(commsRangeStorageKey, range);
+        }
+    };
+
+    const displayedEvents = eventsRange === '7' ? dashboardData.upcomingEvents : listEvents;
+    const displayedEventsLoading = eventsRange === '7' ? false : listEventsLoading;
+
+    const loadListEvents = async (range) => {
+        try {
+            setListEventsLoading(true);
+            const params = {
+                startDate: new Date().toISOString(),
+                limit: range === 'all' ? 20 : 10
+            };
+            if (range !== 'all') {
+                params.endDate = addDays(new Date(), parseInt(range, 10)).toISOString();
+            }
+            const response = await apiService.getEvents(params);
+            setListEvents(response.events || []);
+        } catch (error) {
+            console.error('Errore nel caricamento degli eventi:', error);
+            setListEvents([]);
+        } finally {
+            setListEventsLoading(false);
+        }
+    };
+
+    const loadListComms = async (range) => {
+        try {
+            setListCommsLoading(true);
+            const params = { limit: range === 'all' ? 20 : 10 };
+            if (range !== 'all') {
+                params.sentAfter = addDays(new Date(), -parseInt(range, 10)).toISOString();
+            }
+            const response = await apiService.getCommunications(params);
+            setListComms(response.communications || []);
+        } catch (error) {
+            console.error('Errore nel caricamento delle comunicazioni:', error);
+            setListComms([]);
+        } finally {
+            setListCommsLoading(false);
+        }
+    };
 
     const loadDashboardData = async () => {
         try {
@@ -51,13 +149,6 @@ const Dashboard = () => {
                 })
             );
 
-            // Carica comunicazioni recenti
-            promises.push(
-                apiService.getCommunications({
-                    limit: 5
-                })
-            );
-
             // In base al ruolo, carica dati specifici
             if (user.role === 'parent') {
                 promises.push(apiService.getMyAthletes());
@@ -70,18 +161,14 @@ const Dashboard = () => {
 
             const results = await Promise.allSettled(promises);
 
-            const [eventsResult, communicationsResult, ...otherResults] = results;
+            const [eventsResult, ...otherResults] = results;
 
             const newDashboardData = {
                 upcomingEvents: eventsResult.status === 'fulfilled' ? eventsResult.value.events || [] : [],
-                recentCommunications: communicationsResult.status === 'fulfilled' ? communicationsResult.value.communications || [] : [],
                 expiringDocuments: [],
                 myAthletes: [],
                 stats: {}
             };
-
-            // Elabora risultati aggiuntivi in base al ruolo
-            let resultIndex = 2;
 
             if (user.role === 'parent') {
                 if (otherResults[0]?.status === 'fulfilled') {
@@ -111,15 +198,6 @@ const Dashboard = () => {
             meeting: 'bg-yellow-100 text-yellow-800 border-yellow-200'
         };
         return colors[eventType] || 'bg-gray-100 text-gray-800 border-gray-200';
-    };
-
-    const getEventTypeLabel = (eventType) => {
-        const labels = {
-            training: 'Allenamento',
-            match: 'Partita',
-            meeting: 'Riunione'
-        };
-        return labels[eventType] || eventType;
     };
 
     const formatEventDate = (dateString) => {
@@ -171,7 +249,7 @@ const Dashboard = () => {
 
     if (loading) {
         return (
-            <div className="space-y-8">
+            <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <CardSkeleton className="h-8 w-64" />
                 </div>
@@ -189,7 +267,7 @@ const Dashboard = () => {
     }
 
     return (
-        <div className="space-y-8">
+        <div className="space-y-4">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -212,6 +290,33 @@ const Dashboard = () => {
                 </div>
             </div>
 
+            {/* Quick Actions */}
+            {(user.role === 'admin' || user.role === 'coach') && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-2 flex items-center">
+                        <Plus className="h-5 w-5 mr-2 text-green-600" />
+                        Azioni Rapide
+                    </h2>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Link
+                            to="/events/new"
+                            className="flex items-center justify-center p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors group"
+                        >
+                            <Calendar className="h-5 w-5 text-gray-400 group-hover:text-blue-500 mr-2" />
+                            <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600">Nuovo Evento</span>
+                        </Link>
+
+                        <Link
+                            to="/communications/new"
+                            className="flex items-center justify-center p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors group"
+                        >
+                            <MessageSquare className="h-5 w-5 text-gray-400 group-hover:text-purple-500 mr-2" />
+                            <span className="text-sm font-medium text-gray-700 group-hover:text-purple-600">Nuova Comunicazione</span>
+                        </Link>
+                    </div>
+                </div>
+            )}
+
             {/* Quick Stats */}
             <div className="grid grid-cols-2 gap-4 sm:gap-6">
                 <StatCard
@@ -232,7 +337,7 @@ const Dashboard = () => {
             </div>
 
             {/* Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Eventi prossimi */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="p-6 border-b border-gray-200">
@@ -241,22 +346,28 @@ const Dashboard = () => {
                                 <Calendar className="h-5 w-5 mr-2 text-blue-600" />
                                 Prossimi Eventi
                             </h2>
-                            <Link
-                                to="/calendar"
-                                className="text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium transition-colors"
+                            <select
+                                value={eventsRange}
+                                onChange={(e) => handleEventsRangeChange(e.target.value)}
+                                className="text-sm text-blue-600 font-medium border border-gray-200 rounded-md px-2 py-1 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                                Vedi tutti
-                                <ArrowRight className="ml-1 h-4 w-4" />
-                            </Link>
+                                {DASHBOARD_RANGE_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                     <div className="p-6">
-                        {dashboardData.upcomingEvents.length === 0 ? (
+                        {displayedEventsLoading ? (
+                            <div className="flex items-center justify-center py-12">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                            </div>
+                        ) : displayedEvents.length === 0 ? (
                             <div className="text-center py-12">
                                 <Calendar className="mx-auto h-12 w-12 text-gray-400" />
                                 <h3 className="mt-4 text-lg font-medium text-gray-900">Nessun evento</h3>
                                 <p className="mt-2 text-sm text-gray-500">
-                                    Non ci sono eventi programmati nei prossimi 7 giorni
+                                    Non ci sono eventi programmati in questo periodo
                                 </p>
                                 {(user.role === 'admin' || user.role === 'coach') && (
                                     <Link
@@ -270,8 +381,12 @@ const Dashboard = () => {
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {dashboardData.upcomingEvents.map((event) => (
-                                    <div key={event.id} className="flex items-start space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                                {displayedEvents.map((event) => (
+                                    <Link
+                                        key={event.id}
+                                        to={`/calendar/${event.id}`}
+                                        className="flex items-start space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                    >
                                         <div className={`p-2 rounded-lg ${getEventTypeColor(event.event_type)}`}>
                                             <Calendar className="h-4 w-4" />
                                         </div>
@@ -285,17 +400,13 @@ const Dashboard = () => {
                                                     📍 {event.location}
                                                 </p>
                                             )}
-                                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-2 border ${getEventTypeColor(event.event_type)}`}>
-                                                {getEventTypeLabel(event.event_type)}
-                                            </span>
+                                            {(user.role === 'athlete' || user.role === 'parent') && event.my_attendance_status && (
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-2 ${ATTENDANCE_STATUS_COLORS[event.my_attendance_status]}`}>
+                                                    {ATTENDANCE_STATUS_LABELS[event.my_attendance_status]}
+                                                </span>
+                                            )}
                                         </div>
-                                        <Link
-                                            to={`/events/${event.id}`}
-                                            className="text-gray-400 hover:text-gray-600"
-                                        >
-                                            <Eye className="h-4 w-4" />
-                                        </Link>
-                                    </div>
+                                    </Link>
                                 ))}
                             </div>
                         )}
@@ -308,29 +419,33 @@ const Dashboard = () => {
                         <div className="flex items-center justify-between">
                             <h2 className="text-xl font-semibold text-gray-900 flex items-center">
                                 <MessageSquare className="h-5 w-5 mr-2 text-green-600" />
-                                Comunicazioni Recenti
+                                Comunicazioni
                             </h2>
-                            <Link
-                                to="/communications"
-                                className="text-sm text-blue-600 hover:text-blue-700 flex items-center font-medium transition-colors"
+                            <select
+                                value={commsRange}
+                                onChange={(e) => handleCommsRangeChange(e.target.value)}
+                                className="text-sm text-blue-600 font-medium border border-gray-200 rounded-md px-2 py-1 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
-                                Vedi tutte
-                                <ArrowRight className="ml-1 h-4 w-4" />
-                            </Link>
+                                {DASHBOARD_RANGE_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
                     <div className="p-6">
-                        {dashboardData.recentCommunications.length === 0 ? (
-                            <div className="text-center py-12">
-                                <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
-                                <h3 className="mt-4 text-lg font-medium text-gray-900">Nessuna comunicazione</h3>
-                                <p className="mt-2 text-sm text-gray-500">
+                        {listCommsLoading ? (
+                            <div className="flex items-center justify-center py-12">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                            </div>
+                        ) : listComms.length === 0 ? (
+                            <div className="text-center py-2">
+                                <p className="text-sm text-gray-500">
                                     Non ci sono comunicazioni recenti
                                 </p>
                                 {(user.role === 'admin' || user.role === 'coach') && (
                                     <Link
                                         to="/communications/new"
-                                        className="mt-4 inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                                        className="mt-2 inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
                                     >
                                         <Plus className="h-4 w-4 mr-2" />
                                         Nuova Comunicazione
@@ -339,7 +454,7 @@ const Dashboard = () => {
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {dashboardData.recentCommunications.map((communication) => (
+                                {listComms.map((communication) => (
                                     <div key={communication.id} className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                                         <div className="flex items-start justify-between">
                                             <div className="flex-1 min-w-0">
@@ -480,48 +595,6 @@ const Dashboard = () => {
                 </div>
             )}
 
-            {/* Quick Actions */}
-            {(user.role === 'admin' || user.role === 'coach') && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                        <Plus className="h-5 w-5 mr-2 text-green-600" />
-                        Azioni Rapide
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <Link
-                            to="/events/new"
-                            className="flex items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors group"
-                        >
-                            <div className="text-center">
-                                <Calendar className="h-8 w-8 text-gray-400 group-hover:text-blue-500 mx-auto mb-2" />
-                                <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600">Nuovo Evento</span>
-                            </div>
-                        </Link>
-
-                        {user.role === 'admin' && (
-                            <Link
-                                to="/athletes/new"
-                                className="flex items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-green-500 hover:bg-green-50 transition-colors group"
-                            >
-                                <div className="text-center">
-                                    <Users className="h-8 w-8 text-gray-400 group-hover:text-green-500 mx-auto mb-2" />
-                                    <span className="text-sm font-medium text-gray-700 group-hover:text-green-600">Nuovo Atleta</span>
-                                </div>
-                            </Link>
-                        )}
-
-                        <Link
-                            to="/communications/new"
-                            className="flex items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors group"
-                        >
-                            <div className="text-center">
-                                <MessageSquare className="h-8 w-8 text-gray-400 group-hover:text-purple-500 mx-auto mb-2" />
-                                <span className="text-sm font-medium text-gray-700 group-hover:text-purple-600">Nuova Comunicazione</span>
-                            </div>
-                        </Link>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

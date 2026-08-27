@@ -169,7 +169,7 @@ const Login = () => {
                                     <Shield className="h-7 w-7 text-blue-600" />
                                 </div>
                                 <div>
-                                    <h1 className="text-2xl font-bold text-white">SportClub Manager</h1>
+                                    <h1 className="text-2xl font-bold text-white">Sport Manager</h1>
                                     <p className="text-blue-100 text-sm">Gestionale per società sportive</p>
                                 </div>
                             </div>

@@ -1,10 +1,12 @@
 import React, { useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
     Bell,
     X,
     Check,
     AlertTriangle,
+    AlertCircle,
+    AlertOctagon,
     Calendar,
     FileText,
     MessageSquare,
@@ -18,6 +20,7 @@ import { it } from 'date-fns/locale';
 
 const NotificationDropdown = ({ onClose }) => {
     const dropdownRef = useRef(null);
+    const navigate = useNavigate();
     const {
         notifications,
         unreadCount,
@@ -46,10 +49,16 @@ const NotificationDropdown = ({ onClose }) => {
         if (relatedType === 'communication') return MessageSquare;
 
         switch (type) {
+            case 'expired':
+                return AlertOctagon;
             case 'urgent':
+                return AlertTriangle;
+            case 'high':
                 return AlertTriangle;
             case 'warning':
                 return AlertTriangle;
+            case 'notice':
+                return AlertCircle;
             case 'info':
                 return Info;
             default:
@@ -59,10 +68,16 @@ const NotificationDropdown = ({ onClose }) => {
 
     const getNotificationColor = (type) => {
         switch (type) {
+            case 'expired':
+                return 'text-red-100 bg-red-900';
             case 'urgent':
                 return 'text-red-600 bg-red-100';
+            case 'high':
+                return 'text-orange-600 bg-orange-100';
             case 'warning':
                 return 'text-yellow-600 bg-yellow-100';
+            case 'notice':
+                return 'text-teal-600 bg-teal-100';
             case 'reminder':
                 return 'text-blue-600 bg-blue-100';
             case 'info':
@@ -75,6 +90,15 @@ const NotificationDropdown = ({ onClose }) => {
     const handleMarkAsRead = async (notification) => {
         if (!notification.is_read) {
             await markAsRead(notification.id);
+        }
+    };
+
+    const handleNotificationClick = async (notification) => {
+        await handleMarkAsRead(notification);
+
+        if (notification.related_type === 'profile_link_request') {
+            onClose();
+            navigate('/pending-approvals');
         }
     };
 
@@ -149,7 +173,7 @@ const NotificationDropdown = ({ onClose }) => {
                                     className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
                                         !notification.is_read ? 'bg-blue-50' : ''
                                     }`}
-                                    onClick={() => handleMarkAsRead(notification)}
+                                    onClick={() => handleNotificationClick(notification)}
                                 >
                                     <div className="flex items-start space-x-3">
                                         {/* Icon */}

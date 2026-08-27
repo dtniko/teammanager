@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     Menu,
     X,
@@ -14,7 +14,8 @@ import {
     UserCircle,
     Shield,
     ChevronDown,
-    ClipboardList
+    ClipboardList,
+    ClipboardCheck
 } from 'lucide-react';
 import { useNotifications } from '../../contexts/NotificationContext';
 import NotificationDropdown from '../Notifications/NotificationDropdown';
@@ -24,6 +25,7 @@ const Layout = ({ user, onLogout, children }) => {
     const [userMenuOpen, setUserMenuOpen] = useState(false);
     const [notificationsOpen, setNotificationsOpen] = useState(false);
     const location = useLocation();
+    const navigate = useNavigate();
     const { unreadCount } = useNotifications();
 
     // Configurazione menu di navigazione nell'ORDINE CORRETTO
@@ -38,6 +40,12 @@ const Layout = ({ user, onLogout, children }) => {
             name: 'Gruppi',
             href: '/groups',
             icon: Shield,
+            roles: ['admin', 'coach']
+        },
+        {
+            name: 'Stagioni',
+            href: '/seasons',
+            icon: Calendar,
             roles: ['admin', 'coach']
         },
         {
@@ -75,6 +83,12 @@ const Layout = ({ user, onLogout, children }) => {
             href: '/users',
             icon: UserCircle,
             roles: ['admin']
+        },
+        {
+            name: 'Richieste da approvare',
+            href: '/pending-approvals',
+            icon: ClipboardCheck,
+            roles: ['admin', 'coach']
         }
     ];
 
@@ -127,11 +141,11 @@ const Layout = ({ user, onLogout, children }) => {
                     <div className="flex items-center">
                         <div className="flex-shrink-0">
                             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                                <span className="text-white font-bold text-sm">SC</span>
+                                <span className="text-white font-bold text-sm">SM</span>
                             </div>
                         </div>
                         <div className="ml-3">
-                            <h1 className="text-lg font-semibold text-gray-900">SportClub</h1>
+                            <h1 className="text-lg font-semibold text-gray-900">Sport</h1>
                             <p className="text-xs text-gray-500">Manager</p>
                         </div>
                     </div>
@@ -204,7 +218,7 @@ const Layout = ({ user, onLogout, children }) => {
             {/* Main Content */}
             <div className="lg:pl-64 flex flex-col min-h-screen">
                 {/* Top Navigation */}
-                <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
+                <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0 sticky top-0 z-20">
                     <div className="flex items-center justify-between h-20 px-4 sm:px-6 lg:px-8">
                         {/* Mobile menu button */}
                         <button
@@ -217,7 +231,7 @@ const Layout = ({ user, onLogout, children }) => {
                         {/* Page title */}
                         <div className="flex-1 lg:flex-none">
                             <h2 className="text-lg font-semibold text-gray-900 lg:hidden">
-                                SportClub Manager
+                                Sport Manager
                             </h2>
                         </div>
 
@@ -226,7 +240,13 @@ const Layout = ({ user, onLogout, children }) => {
                             {/* Notifications */}
                             <div className="relative">
                                 <button
-                                    onClick={() => setNotificationsOpen(!notificationsOpen)}
+                                    onClick={() => {
+                                        if (window.matchMedia('(max-width: 1023px)').matches) {
+                                            navigate('/notifications');
+                                        } else {
+                                            setNotificationsOpen(!notificationsOpen);
+                                        }
+                                    }}
                                     className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 relative"
                                 >
                                     <Bell className="h-6 w-6" />

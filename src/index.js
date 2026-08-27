@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
-import { registerServiceWorker } from './utils/serviceWorker';
+import { registerServiceWorker, unregisterServiceWorker } from './utils/serviceWorker';
 
 // Performance monitoring (opzionale)
 import { getCLS, getFID, getFCP, getLCP, getTTFB } from 'web-vitals';
@@ -18,6 +18,16 @@ root.render(
 // Registra il service worker per PWA (solo in produzione, per non cacheare aggressivamente in sviluppo)
 if (process.env.NODE_ENV === 'production') {
     registerServiceWorker();
+} else {
+    // Un service worker registrato in una precedente sessione (es. da una build di
+    // produzione testata localmente sulla stessa porta) resta attivo sull'origine anche
+    // quando si torna al dev server: intercetta i chunk di webpack e manda in loop
+    // infinito l'hot-reload (richieste hot-update.json senza fine, pagina bianca).
+    // In sviluppo lo disattiviamo sempre e ripuliamo le cache che potrebbe aver creato.
+    unregisterServiceWorker();
+    if (window.caches?.keys) {
+        window.caches.keys().then((keys) => keys.forEach((key) => window.caches.delete(key)));
+    }
 }
 
 // Funzione per inviare metriche di performance a un servizio di analytics
@@ -113,8 +123,9 @@ window.addEventListener('appinstalled', () => {
     // o traccia l'evento in analytics
 });
 
-// Gestione aggiornamenti dell'app
-if ('serviceWorker' in navigator) {
+// Gestione aggiornamenti dell'app (solo in produzione: in sviluppo il service worker
+// viene sempre disattivato sopra, quindi questo evento non deve mai scattare)
+if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         // Un nuovo service worker ha preso il controllo
         console.log('🔄 Nuovo service worker attivo');
@@ -167,23 +178,6 @@ if (process.env.NODE_ENV === 'development') {
     };
 
     console.log('🔧 Debug utilities available at window.DEBUG');
-}
-
-// Prevenzione del menu contestuale in produzione (opzionale)
-if (process.env.NODE_ENV === 'production') {
-    document.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-    });
-
-    // Previeni alcune combinazioni di tasti
-    document.addEventListener('keydown', (e) => {
-        // Disabilita F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U
-        if (e.keyCode === 123 ||
-            (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) ||
-            (e.ctrlKey && e.keyCode === 85)) {
-            e.preventDefault();
-        }
-    });
 }
 
 // Gestione della visibilità della pagina (per pause/resume)
@@ -276,7 +270,7 @@ if ('PerformanceObserver' in window) {
 
 // Console message in produzione
 if (process.env.NODE_ENV === 'production') {
-    console.log('%c🏆 SportClub Manager', 'color: #2563eb; font-size: 24px; font-weight: bold;');
+    console.log('%c🏆 Sport Manager', 'color: #2563eb; font-size: 24px; font-weight: bold;');
     console.log('%cGestionale per società sportive - Made with ❤️', 'color: #6b7280; font-size: 14px;');
     console.log('%c⚠️ ATTENZIONE: Questa è una console per sviluppatori. Non inserire codice sconosciuto.', 'color: #dc2626; font-size: 12px; font-weight: bold;');
 }

@@ -13,10 +13,9 @@ const emptyForm = {
     fiscalCode: '',
     placeOfBirth: '',
     address: '',
+    residenceCity: '',
     phone: '',
-    email: '',
-    emergencyContactName: '',
-    emergencyContactPhone: ''
+    email: ''
 };
 
 const AthleteForm = () => {
@@ -72,10 +71,9 @@ const AthleteForm = () => {
                 fiscalCode: athlete.fiscal_code || '',
                 placeOfBirth: athlete.place_of_birth || '',
                 address: athlete.address || '',
+                residenceCity: athlete.residence_city || '',
                 phone: athlete.phone || '',
-                email: athlete.email || '',
-                emergencyContactName: athlete.emergency_contact_name || '',
-                emergencyContactPhone: athlete.emergency_contact_phone || ''
+                email: athlete.email || ''
             });
         } catch (error) {
             console.error('Errore nel caricamento dell\'atleta:', error);
@@ -190,16 +188,6 @@ const AthleteForm = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Codice Fiscale</label>
-                            <input
-                                type="text"
-                                name="fiscalCode"
-                                value={formData.fiscalCode}
-                                onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-                        <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Luogo di Nascita</label>
                             <input
                                 type="text"
@@ -209,13 +197,43 @@ const AthleteForm = () => {
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Codice Fiscale</label>
+                            <input
+                                type="text"
+                                name="fiscalCode"
+                                value={formData.fiscalCode}
+                                onChange={handleChange}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
                     </div>
                 </div>
 
-                {/* Contact Info */}
+                {/* Residenza e Contatti */}
                 <div className="bg-white shadow rounded-lg p-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Contatti</h3>
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Residenza e Contatti</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Indirizzo di Residenza</label>
+                            <input
+                                type="text"
+                                name="address"
+                                value={formData.address}
+                                onChange={handleChange}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Città di Residenza</label>
+                            <input
+                                type="text"
+                                name="residenceCity"
+                                value={formData.residenceCity}
+                                onChange={handleChange}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                             <input
@@ -232,43 +250,6 @@ const AthleteForm = () => {
                                 type="tel"
                                 name="phone"
                                 value={formData.phone}
-                                onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Indirizzo</label>
-                            <input
-                                type="text"
-                                name="address"
-                                value={formData.address}
-                                onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* Emergency Contact */}
-                <div className="bg-white shadow rounded-lg p-6">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Contatto di Emergenza</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                            <input
-                                type="text"
-                                name="emergencyContactName"
-                                value={formData.emergencyContactName}
-                                onChange={handleChange}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Telefono</label>
-                            <input
-                                type="tel"
-                                name="emergencyContactPhone"
-                                value={formData.emergencyContactPhone}
                                 onChange={handleChange}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />

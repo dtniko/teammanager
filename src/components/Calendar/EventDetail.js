@@ -34,9 +34,22 @@ const EVENT_TYPE_COLORS = {
 
 const STATUS_LABELS = {
     pending: 'In attesa',
-    called_up: 'Convocato',
+    called_up: 'In attesa',
     present: 'Presente',
     absent: 'Assente'
+};
+
+const STATUS_ORDER = {
+    present: 0,
+    pending: 1,
+    called_up: 1,
+    absent: 2
+};
+
+const ACTUAL_STATUS_ORDER = {
+    undefined: 0,
+    present: 1,
+    absent: 2
 };
 
 const STATUS_COLORS = {
@@ -230,33 +243,31 @@ const EventDetail = () => {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start space-x-4">
-                    <button
-                        onClick={() => navigate('/calendar')}
-                        className="flex items-center text-gray-600 hover:text-gray-900 mt-1"
-                    >
-                        <ArrowLeft className="h-5 w-5 mr-1" />
-                        Torna al calendario
-                    </button>
-                </div>
+            <div className="flex items-center justify-between">
+                <button
+                    onClick={() => navigate('/calendar')}
+                    className="flex items-center text-gray-600 hover:text-gray-900"
+                >
+                    <ArrowLeft className="h-5 w-5 mr-1" />
+                    Torna al calendario
+                </button>
 
                 {canManage && (
-                    <div className="flex items-center space-x-3 mt-4 sm:mt-0">
+                    <div className="flex items-center space-x-2">
                         <button
                             onClick={openEditForm}
-                            className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                            title="Modifica"
+                            className="flex items-center p-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                         >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Modifica
+                            <Edit className="h-4 w-4" />
                         </button>
                         <button
                             onClick={handleDeleteEvent}
                             disabled={deleting}
-                            className="flex items-center px-4 py-2 text-sm font-medium text-red-700 bg-white border border-red-300 rounded-md hover:bg-red-50 disabled:opacity-50"
+                            title="Elimina"
+                            className="flex items-center p-2 text-red-700 bg-white border border-red-300 rounded-md hover:bg-red-50 disabled:opacity-50"
                         >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Elimina
+                            <Trash2 className="h-4 w-4" />
                         </button>
                     </div>
                 )}
@@ -271,7 +282,7 @@ const EventDetail = () => {
                     </span>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-600">
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
                     <div className="flex items-center">
                         <Clock className="h-4 w-4 mr-2 text-gray-400" />
                         {format(parseISO(event.start_datetime), 'EEEE d MMMM yyyy, HH:mm', { locale: it })}
@@ -282,9 +293,15 @@ const EventDetail = () => {
                         <div className="flex items-center">
                             <Users className="h-4 w-4 mr-2 text-gray-400" />
                             {event.group_name}
+                            {event.location && (
+                                <span className="flex items-center ml-4">
+                                    <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                                    {event.location}
+                                </span>
+                            )}
                         </div>
                     )}
-                    {event.location && (
+                    {!event.group_name && event.location && (
                         <div className="flex items-center">
                             <MapPin className="h-4 w-4 mr-2 text-gray-400" />
                             {event.location}
@@ -293,7 +310,7 @@ const EventDetail = () => {
                 </div>
 
                 {event.description && (
-                    <div className="mt-4 flex items-start text-sm text-gray-600">
+                    <div className="mt-3 flex items-start text-sm text-gray-600">
                         <FileText className="h-4 w-4 mr-2 mt-0.5 text-gray-400" />
                         <p>{event.description}</p>
                     </div>
@@ -363,10 +380,10 @@ const EventDetail = () => {
             {/* Roster for admin/coach */}
             {canManage && (
                 <div className="bg-white shadow rounded-lg overflow-hidden">
-                    <div className="p-6 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-4">
                         <div>
                             <h3 className="text-lg font-medium text-gray-900">Presenze</h3>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className="text-sm text-gray-500">
                                 {Object.entries(summary).map(([status, count]) => `${count} ${STATUS_LABELS[status]?.toLowerCase()}`).join(' · ') || 'Nessun atleta associato'}
                             </p>
                         </div>
@@ -374,7 +391,7 @@ const EventDetail = () => {
                             <button
                                 onClick={handleConveneAll}
                                 disabled={convening}
-                                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
+                                className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 shrink-0"
                             >
                                 <Megaphone className="h-4 w-4 mr-2" />
                                 {convening ? 'Convocazione...' : 'Convoca tutti'}
@@ -392,16 +409,19 @@ const EventDetail = () => {
                         </div>
                     ) : (
                         <div className="divide-y divide-gray-200">
-                            {event.attendance.map(row => (
+                            {[...event.attendance].sort((a, b) => ACTUAL_STATUS_ORDER[a.actual_status] - ACTUAL_STATUS_ORDER[b.actual_status]).map((row, index) => (
                                 <div key={row.id} className="px-4 py-2 flex items-center justify-between gap-3">
-                                    <div className="min-w-0">
+                                    <div className="min-w-0 flex-1">
                                         <p className="text-sm font-medium text-gray-900 truncate">
-                                            {row.first_name} {row.last_name}
+                                            {index + 1}. {row.first_name} {row.last_name}
                                         </p>
                                         {row.notes && (
                                             <p className="text-xs text-gray-500 truncate">{row.notes}</p>
                                         )}
                                     </div>
+                                    <span className={`flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[row.status]}`}>
+                                        {STATUS_LABELS[row.status]}
+                                    </span>
                                     <button
                                         onClick={() => handleMarkActualAttendance(row.athlete_id, row.actual_status === 'present' ? 'absent' : 'present')}
                                         title={row.actual_status ? ACTUAL_STATUS_LABELS[row.actual_status] : 'Da confermare — clicca per segnare presente'}

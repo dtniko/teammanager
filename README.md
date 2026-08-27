@@ -1,4 +1,4 @@
-# 🏆 SportClub Manager
+# 🏆 Sport Manager
 
 **Gestionale completo per società sportive** - Una Progressive Web App moderna per gestire atleti, calendari, documenti e comunicazioni.
 

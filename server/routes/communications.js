@@ -7,7 +7,7 @@ const router = express.Router();
 // Ottieni comunicazioni per l'utente corrente
 router.get('/', async (req, res) => {
     try {
-        const { page = 1, limit = 20, unreadOnly = 'false' } = req.query;
+        const { page = 1, limit = 20, unreadOnly = 'false', sentAfter = '' } = req.query;
         const offset = (page - 1) * limit;
 
         let whereConditions = [];
@@ -55,6 +55,13 @@ router.get('/', async (req, res) => {
         ))
       )`);
             queryParams.push(req.user.id);
+            paramIndex++;
+        }
+
+        // Filtro per data di invio (es. "ultima settimana")
+        if (sentAfter) {
+            whereConditions.push(`c.sent_at >= $${paramIndex}`);
+            queryParams.push(sentAfter);
             paramIndex++;
         }
 

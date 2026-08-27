@@ -109,6 +109,28 @@ router.get('/', async (req, res) => {
 
         const whereClause = whereConditions.join(' AND ');
 
+        let myAttendanceStatusSelect = 'NULL as my_attendance_status';
+        if (req.user.role === 'athlete') {
+            myAttendanceStatusSelect = `(
+          SELECT a.status FROM attendance a
+          JOIN athletes ath ON a.athlete_id = ath.id
+          WHERE a.event_id = e.id AND ath.user_id = $${paramIndex}
+          LIMIT 1
+        ) as my_attendance_status`;
+            queryParams.push(req.user.id);
+            paramIndex++;
+        } else if (req.user.role === 'parent') {
+            myAttendanceStatusSelect = `(
+          SELECT a.status FROM attendance a
+          JOIN parent_athlete pa ON pa.athlete_id = a.athlete_id
+          WHERE a.event_id = e.id AND pa.parent_id = $${paramIndex}
+          ORDER BY a.status = 'pending' DESC, a.status = 'called_up' DESC
+          LIMIT 1
+        ) as my_attendance_status`;
+            queryParams.push(req.user.id);
+            paramIndex++;
+        }
+
         const eventsQuery = `
       SELECT 
         e.id, e.title, e.description, e.event_type, 
@@ -135,7 +157,8 @@ router.get('/', async (req, res) => {
           SELECT COUNT(*)
           FROM attendance a
           WHERE a.event_id = e.id AND a.status = 'called_up'
-        ) as called_up_count
+        ) as called_up_count,
+        ${myAttendanceStatusSelect}
       FROM events e
       LEFT JOIN groups g ON e.group_id = g.id
       LEFT JOIN users u ON e.created_by = u.id

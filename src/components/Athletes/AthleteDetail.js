@@ -38,6 +38,16 @@ const AthleteDetail = () => {
     const [documentsLoading, setDocumentsLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('details');
     const [uploadingDocument, setUploadingDocument] = useState(false);
+    const [seasons, setSeasons] = useState([]);
+    const [seasonFilter, setSeasonFilter] = useState('');
+    const [showUploadForm, setShowUploadForm] = useState(false);
+    const [uploadForm, setUploadForm] = useState({
+        documentType: 'other',
+        title: '',
+        seasonId: '',
+        expiryDate: '',
+        file: null
+    });
 
     const loadAthleteData = useCallback(async () => {
         try {
@@ -56,7 +66,8 @@ const AthleteDetail = () => {
     const loadDocuments = useCallback(async () => {
         try {
             setDocumentsLoading(true);
-            const response = await apiService.getDocuments(athleteId);
+            const params = seasonFilter ? { seasonId: seasonFilter } : {};
+            const response = await apiService.getDocuments(athleteId, params);
             setDocuments(response.documents || []);
         } catch (error) {
             console.error('Errore nel caricamento dei documenti:', error);
@@ -64,11 +75,30 @@ const AthleteDetail = () => {
         } finally {
             setDocumentsLoading(false);
         }
-    }, [athleteId]);
+    }, [athleteId, seasonFilter]);
+
+    const loadSeasons = useCallback(async () => {
+        try {
+            const response = await apiService.getSeasons();
+            const list = response.seasons || [];
+            setSeasons(list);
+            const current = list.find((s) => s.is_current);
+            if (current) {
+                setSeasonFilter((prev) => prev || String(current.id));
+                setUploadForm((prev) => ({ ...prev, seasonId: prev.seasonId || String(current.id) }));
+            }
+        } catch (error) {
+            console.error('Errore nel caricamento delle stagioni:', error);
+        }
+    }, []);
 
     useEffect(() => {
         loadAthleteData();
     }, [athleteId, loadAthleteData]);
+
+    useEffect(() => {
+        loadSeasons();
+    }, [loadSeasons]);
 
     useEffect(() => {
         if (activeTab === 'documents') {
@@ -108,23 +138,62 @@ const AthleteDetail = () => {
         }
     };
 
-    const handleDocumentUpload = async (event) => {
+    const openUploadForm = () => {
+        const current = seasons.find((s) => s.is_current);
+        setUploadForm({
+            documentType: 'other',
+            title: '',
+            seasonId: current ? String(current.id) : '',
+            expiryDate: '',
+            file: null
+        });
+        setShowUploadForm(true);
+    };
+
+    const closeUploadForm = () => {
+        if (uploadingDocument) return;
+        setShowUploadForm(false);
+    };
+
+    const handleUploadFormChange = (field, value) => {
+        setUploadForm((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleUploadFileSelected = (event) => {
         const file = event.target.files[0];
         if (!file) return;
+        setUploadForm((prev) => ({ ...prev, file, title: file.name }));
+        event.target.value = '';
+    };
+
+    const handleUploadSubmit = async (event) => {
+        event.preventDefault();
+
+        if (!uploadForm.file) {
+            toast.error('Seleziona un file da caricare');
+            return;
+        }
 
         try {
             setUploadingDocument(true);
 
             const formData = new FormData();
-            formData.append('document', file);
+            formData.append('document', uploadForm.file);
             formData.append('athleteId', athleteId);
-            formData.append('title', file.name);
-            formData.append('documentType', 'other'); // Default, l'utente dovrebbe poter scegliere
+            formData.append('title', uploadForm.title || uploadForm.file.name);
+            formData.append('documentType', uploadForm.documentType);
+            if (uploadForm.seasonId) {
+                formData.append('seasonId', uploadForm.seasonId);
+            }
+            if (uploadForm.expiryDate) {
+                formData.append('expiryDate', uploadForm.expiryDate);
+            }
 
             const response = await apiService.uploadDocument(formData);
 
             if (response.success) {
                 toast.success('Documento caricato con successo');
+                setShowUploadForm(false);
                 loadDocuments();
             }
         } catch (error) {
@@ -132,7 +201,6 @@ const AthleteDetail = () => {
             toast.error('Errore nel caricamento del documento');
         } finally {
             setUploadingDocument(false);
-            event.target.value = ''; // Reset input
         }
     };
 
@@ -466,23 +534,32 @@ const AthleteDetail = () => {
             {activeTab === 'documents' && (
                 <div className="space-y-6">
                     {/* Documents Header */}
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
                         <h3 className="text-lg font-medium text-gray-900">Documenti</h3>
-                        {canUploadDocuments() && (
-                            <div className="flex items-center space-x-3">
-                                <label className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer">
+                        <div className="flex items-center space-x-3">
+                            <select
+                                value={seasonFilter}
+                                onChange={(e) => setSeasonFilter(e.target.value)}
+                                className="rounded-md border-gray-300 shadow-sm text-sm focus:border-blue-500 focus:ring-blue-500"
+                            >
+                                <option value="">Tutte le stagioni</option>
+                                {seasons.map((season) => (
+                                    <option key={season.id} value={season.id}>
+                                        {season.name}{season.is_current ? ' (corrente)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            {canUploadDocuments() && (
+                                <button
+                                    type="button"
+                                    onClick={openUploadForm}
+                                    className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                                >
                                     <Upload className="h-4 w-4 mr-2" />
                                     Carica Documento
-                                    <input
-                                        type="file"
-                                        className="hidden"
-                                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                        onChange={handleDocumentUpload}
-                                        disabled={uploadingDocument}
-                                    />
-                                </label>
-                            </div>
-                        )}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Documents List */}
@@ -499,17 +576,14 @@ const AthleteDetail = () => {
                             </p>
                             {canUploadDocuments() && (
                                 <div className="mt-6">
-                                    <label className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer">
+                                    <button
+                                        type="button"
+                                        onClick={openUploadForm}
+                                        className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                                    >
                                         <Upload className="h-4 w-4 mr-2" />
                                         Carica Primo Documento
-                                        <input
-                                            type="file"
-                                            className="hidden"
-                                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                                            onChange={handleDocumentUpload}
-                                            disabled={uploadingDocument}
-                                        />
-                                    </label>
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -634,10 +708,114 @@ const AthleteDetail = () => {
                 </div>
             )}
 
-            {uploadingDocument && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white p-6 rounded-lg">
-                        <LoadingSpinner size="medium" text="Caricamento documento..." />
+            {showUploadForm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+                        {uploadingDocument ? (
+                            <div className="p-6">
+                                <LoadingSpinner size="medium" text="Caricamento documento..." />
+                            </div>
+                        ) : (
+                            <form onSubmit={handleUploadSubmit} className="p-6 space-y-4">
+                                <h3 className="text-lg font-medium text-gray-900">Carica Documento</h3>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Tipo documento</label>
+                                    <select
+                                        value={uploadForm.documentType}
+                                        onChange={(e) => handleUploadFormChange('documentType', e.target.value)}
+                                        className="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-blue-500 focus:ring-blue-500"
+                                    >
+                                        <option value="payment">Attestazione di Pagamento</option>
+                                        <option value="medical_certificate">Certificato Medico</option>
+                                        <option value="other">Altro Documento</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Titolo</label>
+                                    <input
+                                        type="text"
+                                        value={uploadForm.title}
+                                        onChange={(e) => handleUploadFormChange('title', e.target.value)}
+                                        className="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="Titolo del documento"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Stagione</label>
+                                    <select
+                                        value={uploadForm.seasonId}
+                                        onChange={(e) => handleUploadFormChange('seasonId', e.target.value)}
+                                        className="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-blue-500 focus:ring-blue-500"
+                                    >
+                                        <option value="">Nessuna stagione</option>
+                                        {seasons.map((season) => (
+                                            <option key={season.id} value={season.id}>
+                                                {season.name}{season.is_current ? ' (corrente)' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Data di scadenza</label>
+                                    <input
+                                        type="date"
+                                        value={uploadForm.expiryDate}
+                                        onChange={(e) => handleUploadFormChange('expiryDate', e.target.value)}
+                                        className="block w-full rounded-md border-gray-300 shadow-sm text-sm focus:border-blue-500 focus:ring-blue-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">File</label>
+                                    <div className="flex flex-col space-y-2">
+                                        <label className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+                                            <Upload className="h-4 w-4 mr-2" />
+                                            Scegli file
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="application/pdf,image/*"
+                                                onChange={handleUploadFileSelected}
+                                            />
+                                        </label>
+                                        <label className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
+                                            <Upload className="h-4 w-4 mr-2" />
+                                            Scatta foto
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/*"
+                                                capture="environment"
+                                                onChange={handleUploadFileSelected}
+                                            />
+                                        </label>
+                                        {uploadForm.file && (
+                                            <p className="text-xs text-gray-500">File selezionato: {uploadForm.file.name}</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end space-x-3 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={closeUploadForm}
+                                        className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                                    >
+                                        Annulla
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                                    >
+                                        Carica
+                                    </button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}

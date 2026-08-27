@@ -143,8 +143,8 @@ export const NotificationProvider = ({ children }) => {
 
             setPushSubscription(subscription);
 
-            // Invia la sottoscrizione al server (implementare API)
-            // await apiService.savePushSubscription(subscription);
+            // Invia la sottoscrizione al server
+            await apiService.savePushSubscription(subscription);
 
             console.log('Push notifications attivate');
         } catch (error) {
@@ -197,13 +197,9 @@ export const NotificationProvider = ({ children }) => {
             const response = await apiService.markNotificationAsRead(notificationId);
 
             if (response.success) {
-                setNotifications(prev =>
-                    prev.map(notification =>
-                        notification.id === notificationId
-                            ? { ...notification, is_read: true }
-                            : notification
-                    )
-                );
+                // La vista di default (dropdown) nasconde le notifiche lette:
+                // rimuoverla subito dalla lista invece di aspettare il prossimo fetch
+                setNotifications(prev => prev.filter(notification => notification.id !== notificationId));
 
                 setUnreadCount(prev => Math.max(0, prev - 1));
             }
@@ -219,9 +215,7 @@ export const NotificationProvider = ({ children }) => {
             const response = await apiService.markAllNotificationsAsRead();
 
             if (response.success) {
-                setNotifications(prev =>
-                    prev.map(notification => ({ ...notification, is_read: true }))
-                );
+                setNotifications([]);
                 setUnreadCount(0);
                 toast.success('Tutte le notifiche sono state segnate come lette');
             }

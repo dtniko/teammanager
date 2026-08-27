@@ -1,5 +1,6 @@
 const express = require('express');
 const { query, getClient } = require('../config/database');
+const { sendPushToUser, sendPushToUsers } = require('../services/webPush');
 
 const router = express.Router();
 
@@ -10,7 +11,8 @@ router.get('/', async (req, res) => {
             page = 1,
             limit = 20,
             unreadOnly = 'false',
-            type = ''
+            type = '',
+            includeResolved = 'false'
         } = req.query;
 
         const offset = (page - 1) * limit;
@@ -31,13 +33,23 @@ router.get('/', async (req, res) => {
             paramIndex++;
         }
 
+        // Vista di default: nasconde le notifiche già lette e le richieste di
+        // collegamento profilo già evase (approvate/rifiutate). "Mostra tutte"
+        // (includeResolved=true) toglie entrambi i filtri e mostra anche lo storico.
+        if (includeResolved !== 'true') {
+            whereConditions.push('n.is_read = false');
+            whereConditions.push("(n.related_type != 'profile_link_request' OR plr.status = 'pending')");
+        }
+
         const whereClause = whereConditions.join(' AND ');
+        const joinClause = "LEFT JOIN profile_link_requests plr ON n.related_type = 'profile_link_request' AND n.related_id = plr.id";
 
         const notificationsResult = await query(`
-      SELECT 
+      SELECT
         n.id, n.title, n.message, n.type, n.related_type, n.related_id,
         n.is_read, n.sent_at
       FROM notifications n
+      ${joinClause}
       WHERE ${whereClause}
       ORDER BY n.sent_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -45,8 +57,9 @@ router.get('/', async (req, res) => {
 
         // Conta totale per paginazione
         const countResult = await query(`
-      SELECT COUNT(*) as total, COUNT(CASE WHEN is_read = false THEN 1 END) as unread
+      SELECT COUNT(*) as total, COUNT(CASE WHEN n.is_read = false THEN 1 END) as unread
       FROM notifications n
+      ${joinClause}
       WHERE ${whereClause}
     `, queryParams);
 
@@ -160,6 +173,61 @@ router.delete('/read', async (req, res) => {
     }
 });
 
+// Salva/aggiorna una subscription Web Push per l'utente corrente
+router.post('/push-subscribe', async (req, res) => {
+    try {
+        const { endpoint, keys } = req.body;
+
+        if (!endpoint || !keys?.p256dh || !keys?.auth) {
+            return res.status(400).json({ error: 'Subscription non valida' });
+        }
+
+        const userAgent = req.headers['user-agent'] || null;
+
+        const upsertResult = await query(`
+      INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (endpoint) DO UPDATE
+        SET user_id = EXCLUDED.user_id,
+            p256dh = EXCLUDED.p256dh,
+            auth = EXCLUDED.auth,
+            user_agent = EXCLUDED.user_agent
+      RETURNING *
+    `, [req.user.id, endpoint, keys.p256dh, keys.auth, userAgent]);
+
+        res.status(201).json({
+            success: true,
+            subscription: upsertResult.rows[0]
+        });
+
+    } catch (error) {
+        console.error('Errore nel salvataggio della push subscription:', error);
+        res.status(500).json({ error: 'Errore nel salvataggio della push subscription' });
+    }
+});
+
+// Rimuove una subscription Web Push dell'utente corrente
+router.delete('/push-subscribe', async (req, res) => {
+    try {
+        const { endpoint } = req.body;
+
+        if (!endpoint) {
+            return res.status(400).json({ error: 'Endpoint obbligatorio' });
+        }
+
+        await query(
+            'DELETE FROM push_subscriptions WHERE endpoint = $1 AND user_id = $2',
+            [endpoint, req.user.id]
+        );
+
+        res.json({ success: true });
+
+    } catch (error) {
+        console.error('Errore nella rimozione della push subscription:', error);
+        res.status(500).json({ error: 'Errore nella rimozione della push subscription' });
+    }
+});
+
 // Funzioni helper per creare notifiche (usate da altri moduli)
 const createNotification = async (userId, title, message, type = 'info', relatedType = null, relatedId = null) => {
     try {
@@ -168,6 +236,9 @@ const createNotification = async (userId, title, message, type = 'info', related
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `, [userId, title, message, type, relatedType, relatedId]);
+
+        sendPushToUser(userId, { title, body: message, url: '/notifications' })
+            .catch((err) => console.error('Errore nell\'invio della push notification:', err));
 
         return result.rows[0];
     } catch (error) {
@@ -198,6 +269,9 @@ const createBulkNotifications = async (userIds, title, message, type = 'info', r
 
         console.log(`📱 ${userIds.length} notifiche create in bulk: ${title}`);
 
+        sendPushToUsers(userIds, { title, body: message, url: '/notifications' })
+            .catch((err) => console.error('Errore nell\'invio delle push notification in bulk:', err));
+
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('Errore nella creazione delle notifiche in bulk:', error);
@@ -207,66 +281,85 @@ const createBulkNotifications = async (userIds, title, message, type = 'info', r
     }
 };
 
-// Notifica scadenza documenti
+// Soglie di preavviso scadenza documento (giorni rimanenti -> type/label)
+const DOCUMENT_EXPIRY_THRESHOLDS = [
+    { days: 90, type: 'info', label: '3 mesi' },
+    { days: 60, type: 'notice', label: '2 mesi' },
+    { days: 30, type: 'warning', label: '1 mese' },
+    { days: 14, type: 'high', label: '2 settimane' },
+    { days: 7, type: 'urgent', label: '1 settimana' },
+    { days: 0, type: 'expired', label: 'scaduto' }
+];
+
+const DOCUMENT_TYPE_LABELS = {
+    payment: 'Attestazione di Pagamento',
+    medical_certificate: 'Certificato Medico',
+    other: 'Altro Documento'
+};
+
+// Notifica scadenza documenti (6 soglie: 90/60/30/14/7/0 giorni rimanenti)
 const notifyDocumentExpiry = async () => {
     try {
         console.log('🔔 Controllo scadenze documenti...');
 
-        // Documenti che scadono nei prossimi 7 giorni
-        const urgentExpiringResult = await query(`
-      SELECT DISTINCT
-        d.id, d.title, d.expiry_date, d.document_type,
-        a.id as athlete_id, a.first_name, a.last_name,
-        pa.parent_id
-      FROM documents d
-      JOIN athletes a ON d.athlete_id = a.id
-      LEFT JOIN parent_athlete pa ON a.id = pa.athlete_id
-      WHERE d.expiry_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
-        AND d.is_valid = true
-        AND a.is_active = true
-    `);
+        let totalProcessed = 0;
 
-        // Documenti che scadono nei prossimi 30 giorni
-        const warningExpiringResult = await query(`
-      SELECT DISTINCT
-        d.id, d.title, d.expiry_date, d.document_type,
-        a.id as athlete_id, a.first_name, a.last_name,
-        pa.parent_id
-      FROM documents d
-      JOIN athletes a ON d.athlete_id = a.id
-      LEFT JOIN parent_athlete pa ON a.id = pa.athlete_id
-      WHERE d.expiry_date BETWEEN CURRENT_DATE + INTERVAL '8 days' AND CURRENT_DATE + INTERVAL '30 days'
-        AND d.is_valid = true
-        AND a.is_active = true
-    `);
+        for (const threshold of DOCUMENT_EXPIRY_THRESHOLDS) {
+            const expiringResult = await query(`
+        SELECT
+          d.id, d.title, d.expiry_date, d.document_type,
+          a.id as athlete_id, a.first_name, a.last_name
+        FROM documents d
+        JOIN athletes a ON d.athlete_id = a.id
+        WHERE d.expiry_date = CURRENT_DATE + INTERVAL '${threshold.days} days'
+          AND d.is_valid = true
+          AND a.is_active = true
+      `);
 
-        // Notifiche urgenti (7 giorni)
-        for (const doc of urgentExpiringResult.rows) {
-            const title = `Documento in scadenza urgente`;
-            const message = `Il documento "${doc.title}" di ${doc.first_name} ${doc.last_name} scade il ${doc.expiry_date}`;
+            for (const doc of expiringResult.rows) {
+                const recipientsResult = await query(`
+          SELECT DISTINCT user_id FROM (
+            SELECT a.user_id
+            FROM athletes a
+            WHERE a.id = $1 AND a.user_id IS NOT NULL
 
-            if (doc.parent_id) {
-                await createNotification(doc.parent_id, title, message, 'urgent', 'document', doc.id);
-            }
+            UNION
 
-            // Notifica anche agli admin
-            const adminsResult = await query('SELECT id FROM users WHERE role = $1 AND is_active = true', ['admin']);
-            for (const admin of adminsResult.rows) {
-                await createNotification(admin.id, title, message, 'urgent', 'document', doc.id);
+            SELECT pa.parent_id AS user_id
+            FROM parent_athlete pa
+            WHERE pa.athlete_id = $1
+
+            UNION
+
+            SELECT sg.user_id
+            FROM athlete_group ag
+            JOIN staff_group sg ON sg.group_id = ag.group_id
+            WHERE ag.athlete_id = $1
+              AND sg.role IN ('coach', 'manager', 'assistant')
+          ) recipients
+          WHERE user_id IS NOT NULL
+        `, [doc.athlete_id]);
+
+                const userIds = recipientsResult.rows.map(r => r.user_id);
+                if (userIds.length === 0) continue;
+
+                const athleteName = `${doc.first_name} ${doc.last_name}`;
+                const documentLabel = DOCUMENT_TYPE_LABELS[doc.document_type] || doc.title;
+
+                const title = threshold.type === 'expired'
+                    ? 'Documento scaduto'
+                    : 'Documento in scadenza';
+
+                const message = threshold.type === 'expired'
+                    ? `${documentLabel} di ${athleteName} è scaduto`
+                    : `${documentLabel} di ${athleteName} scade tra ${threshold.label}`;
+
+                await createBulkNotifications(userIds, title, message, threshold.type, 'document', doc.id);
+                totalProcessed++;
             }
         }
 
-        // Notifiche di warning (30 giorni)
-        for (const doc of warningExpiringResult.rows) {
-            const title = `Documento in scadenza`;
-            const message = `Il documento "${doc.title}" di ${doc.first_name} ${doc.last_name} scade il ${doc.expiry_date}`;
-
-            if (doc.parent_id) {
-                await createNotification(doc.parent_id, title, message, 'warning', 'document', doc.id);
-            }
-        }
-
-        console.log(`✅ Processate ${urgentExpiringResult.rows.length} scadenze urgenti e ${warningExpiringResult.rows.length} warning`);
+        console.log(`✅ Processate ${totalProcessed} notifiche di scadenza documento`);
 
     } catch (error) {
         console.error('Errore nel controllo scadenze documenti:', error);
