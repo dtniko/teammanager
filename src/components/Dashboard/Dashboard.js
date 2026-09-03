@@ -66,7 +66,6 @@ const Dashboard = () => {
     });
     const [listComms, setListComms] = useState([]);
     const [listCommsLoading, setListCommsLoading] = useState(true);
-
     useEffect(() => {
         loadDashboardData();
     }, [user]);
@@ -208,7 +207,7 @@ const Dashboard = () => {
         } else if (isTomorrow(date)) {
             return `Domani alle ${format(date, 'HH:mm')}`;
         } else {
-            return format(date, 'EEEE d MMMM alle HH:mm', { locale: it });
+            return format(date, "EEEE d MMMM 'alle' HH:mm", { locale: it });
         }
     };
 
@@ -395,6 +394,18 @@ const Dashboard = () => {
                                             <p className="text-sm text-gray-600 mt-1">
                                                 {formatEventDate(event.start_datetime)}
                                             </p>
+                                            {event.group_name && (
+                                                <p className="text-xs text-blue-600 mt-1 flex items-center">
+                                                    <Users className="h-3 w-3 mr-1" />
+                                                    {event.group_name}
+                                                </p>
+                                            )}
+                                            {user.role === 'parent' && event.parent_athlete_names && (
+                                                <p className="text-xs text-purple-600 mt-1 flex items-center">
+                                                    <Users className="h-3 w-3 mr-1" />
+                                                    {event.parent_athlete_names}
+                                                </p>
+                                            )}
                                             {event.location && (
                                                 <p className="text-xs text-gray-500 mt-1 flex items-center">
                                                     📍 {event.location}
@@ -595,7 +606,7 @@ const Dashboard = () => {
                 </div>
             )}
 
-        </div>
+            </div>
     );
 };
 

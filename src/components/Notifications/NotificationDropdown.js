@@ -96,7 +96,7 @@ const NotificationDropdown = ({ onClose }) => {
     const handleNotificationClick = async (notification) => {
         await handleMarkAsRead(notification);
 
-        if (notification.related_type === 'profile_link_request') {
+        if (notification.related_type === 'profile_link_request' || notification.related_type === 'role_change_request') {
             onClose();
             navigate('/pending-approvals');
         }

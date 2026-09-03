@@ -10,6 +10,22 @@ router.get('/status', async (req, res) => {
     try {
         const { id: userId, role } = req.user;
 
+        // Controlla se esiste una richiesta di cambio ruolo pendente
+        const pendingRoleResult = await query(`
+      SELECT rcr.*, rcr.requested_role AS role
+      FROM role_change_requests rcr
+      WHERE rcr.user_id = $1 AND rcr.status = 'pending'
+      LIMIT 1
+    `, [userId]);
+
+        if (pendingRoleResult.rows.length > 0) {
+            return res.json({
+                needsOnboarding: true,
+                state: 'pending_role_change',
+                request: pendingRoleResult.rows[0]
+            });
+        }
+
         if (role !== 'athlete' && role !== 'parent') {
             return res.json({ needsOnboarding: false, state: 'done' });
         }
@@ -326,6 +342,60 @@ router.get('/pending-requests', requireRole(['admin', 'coach']), async (req, res
     }
 });
 
+// Lista richieste pending unificata (profile link + role change)
+router.get('/unified-pending-requests', requireRole(['admin', 'coach']), async (req, res) => {
+    try {
+        // Profile link requests
+        const profileResult = await query(`
+      SELECT
+        plr.id, plr.context, plr.relationship, plr.status, plr.created_at,
+        u.id as user_id, u.email as user_email, u.first_name as user_first_name, u.last_name as user_last_name,
+        a.id as athlete_id, a.first_name as athlete_first_name, a.last_name as athlete_last_name
+      FROM profile_link_requests plr
+      JOIN users u ON u.id = plr.user_id
+      JOIN athletes a ON a.id = plr.athlete_id
+      WHERE plr.status = 'pending'
+      ORDER BY plr.created_at DESC
+    `);
+
+        // Role change requests (coach vede solo profile link, admin vede entrambi)
+        const { role } = req.user;
+        const roleResult = role === 'admin'
+            ? await query(`
+        SELECT
+          rcr.id, rcr.requested_role, rcr.reason, rcr.status, rcr.created_at,
+          u.id as user_id, u.email as user_email, u.first_name as user_first_name, u.last_name as user_last_name, u.role as user_role
+        FROM role_change_requests rcr
+        JOIN users u ON u.id = rcr.user_id
+        WHERE rcr.status = 'pending'
+        ORDER BY rcr.created_at DESC
+      `)
+            : { rows: [] };
+
+        // Normalizza entrambi i tipi con campo 'type'
+        const profileRequests = profileResult.rows.map(r => ({
+            ...r,
+            type: 'profile_link',
+            request_type: r.context === 'athlete' ? 'Atleta (auto-collegamento)' : 'Genitore (collega figlio)'
+        }));
+
+        const roleRequests = roleResult.rows.map(r => ({
+            ...r,
+            type: 'role_change',
+            request_type: r.requested_role === 'admin' ? 'Amministratore' : 'Coach/Dirigente'
+        }));
+
+        // Merge e ordina per created_at più recente
+        const all = [...profileRequests, ...roleRequests]
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+        res.json({ requests: all });
+    } catch (error) {
+        console.error('Errore nel recupero richieste unificate:', error);
+        res.status(500).json({ error: 'Errore interno del server' });
+    }
+});
+
 // Approvazione richiesta (solo admin/coach)
 router.post('/requests/:id/approve', requireRole(['admin', 'coach']), async (req, res) => {
     const client = await getClient();
@@ -432,6 +502,194 @@ router.post('/requests/:id/reject', requireRole(['admin', 'coach']), async (req,
 
     } catch (error) {
         console.error('Errore nel rifiuto della richiesta:', error);
+        res.status(500).json({ error: 'Errore interno del server' });
+    }
+});
+
+// ==========================================
+// Role Change Requests
+// ==========================================
+
+// Richiedi cambio ruolo (coach/admin)
+router.post('/role-change', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { requestedRole, reason } = req.body;
+
+        if (!requestedRole || !['coach', 'admin'].includes(requestedRole)) {
+            return res.status(400).json({ error: 'requestedRole obbligatoria e deve essere "coach" o "admin"' });
+        }
+
+        // Verifica che l'utente non abbia già una richiesta pendente
+        const existingResult = await query(
+            "SELECT id FROM role_change_requests WHERE user_id = $1 AND status = 'pending'",
+            [userId]
+        );
+
+        if (existingResult.rows.length > 0) {
+            return res.status(409).json({ error: 'Esiste già una richiesta di cambio ruolo in attesa' });
+        }
+
+        // Verifica che l'utente non abbia già il ruolo richiesto
+        if (req.user.role === requestedRole) {
+            return res.status(409).json({ error: `Hai già il ruolo ${requestedRole}` });
+        }
+
+        const insertResult = await query(`
+      INSERT INTO role_change_requests (user_id, requested_role, reason, status)
+      VALUES ($1, $2, $3, 'pending')
+      RETURNING *
+    `, [userId, requestedRole, reason || null]);
+
+        const roleRequest = insertResult.rows[0];
+
+        // Notifica admin/coach con ruolo admin
+        try {
+            const adminResult = await query(
+                "SELECT id FROM users WHERE role = 'admin' AND is_active = true"
+            );
+            const adminIds = adminResult.rows.map(r => r.id);
+
+            if (adminIds.length > 0) {
+                const roleName = requestedRole === 'admin' ? 'amministratore' : 'allenatore/dirigente';
+                const title = `Nuova richiesta ruolo ${roleName}`;
+                const message = `${req.user.first_name || req.user.email} ha richiesto il ruolo di ${roleName}`;
+
+                await createBulkNotifications(
+                    adminIds,
+                    title,
+                    message,
+                    'info',
+                    'role_change_request',
+                    roleRequest.id
+                );
+            }
+        } catch (notificationError) {
+            console.error('Errore nell\'invio notifica cambio ruolo:', notificationError);
+        }
+
+        res.status(201).json({
+            success: true,
+            request: roleRequest
+        });
+
+    } catch (error) {
+        console.error('Errore nella richiesta di cambio ruolo:', error);
+        res.status(500).json({ error: 'Errore interno del server' });
+    }
+});
+
+// Lista richieste cambio ruolo pendenti (solo admin)
+router.get('/role-change/requests', requireRole(['admin']), async (req, res) => {
+    try {
+        const requestsResult = await query(`
+      SELECT
+        rcr.id, rcr.requested_role, rcr.reason, rcr.status, rcr.created_at, rcr.reviewed_at,
+        u.id as user_id, u.email as user_email, u.first_name as user_first_name, u.last_name as user_last_name, u.role as user_role
+      FROM role_change_requests rcr
+      JOIN users u ON u.id = rcr.user_id
+      WHERE rcr.status = 'pending'
+      ORDER BY rcr.created_at DESC
+    `);
+
+        res.json({ requests: requestsResult.rows });
+
+    } catch (error) {
+        console.error('Errore nel recupero richieste cambio ruolo:', error);
+        res.status(500).json({ error: 'Errore interno del server' });
+    }
+});
+
+// Approva cambio ruolo (solo admin)
+router.post('/role-change/:id/approve', requireRole(['admin']), async (req, res) => {
+    const client = await getClient();
+
+    try {
+        const { id } = req.params;
+
+        await client.query('BEGIN');
+
+        const requestResult = await client.query(
+            'SELECT * FROM role_change_requests WHERE id = $1',
+            [id]
+        );
+
+        if (requestResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            client.release();
+            return res.status(404).json({ error: 'Richiesta non trovata' });
+        }
+
+        const request = requestResult.rows[0];
+
+        if (request.status !== 'pending') {
+            await client.query('ROLLBACK');
+            client.release();
+            return res.status(409).json({ error: 'La richiesta non è più in attesa' });
+        }
+
+        // Aggiorna il ruolo dell'utente
+        await client.query(
+            'UPDATE users SET role = $1 WHERE id = $2',
+            [request.requested_role, request.user_id]
+        );
+
+        // Aggiorna lo stato della richiesta
+        const updatedRequestResult = await client.query(`
+      UPDATE role_change_requests
+      SET status = 'approved', reviewed_by = $1, reviewed_at = NOW()
+      WHERE id = $2
+      RETURNING *
+    `, [req.user.id, id]);
+
+        await client.query('COMMIT');
+
+        res.json({
+            success: true,
+            request: updatedRequestResult.rows[0]
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Errore nell\'approvazione del cambio ruolo:', error);
+        res.status(500).json({ error: 'Errore interno del server' });
+    } finally {
+        client.release();
+    }
+});
+
+// Rifiuta cambio ruolo (solo admin)
+router.post('/role-change/:id/reject', requireRole(['admin']), async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const requestResult = await query(
+            'SELECT * FROM role_change_requests WHERE id = $1',
+            [id]
+        );
+
+        if (requestResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Richiesta non trovata' });
+        }
+
+        if (requestResult.rows[0].status !== 'pending') {
+            return res.status(409).json({ error: 'La richiesta non è più in attesa' });
+        }
+
+        const updatedRequestResult = await query(`
+      UPDATE role_change_requests
+      SET status = 'rejected', reviewed_by = $1, reviewed_at = NOW()
+      WHERE id = $2
+      RETURNING *
+    `, [req.user.id, id]);
+
+        res.json({
+            success: true,
+            request: updatedRequestResult.rows[0]
+        });
+
+    } catch (error) {
+        console.error('Errore nel rifiuto del cambio ruolo:', error);
         res.status(500).json({ error: 'Errore interno del server' });
     }
 });

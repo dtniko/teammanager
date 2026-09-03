@@ -47,10 +47,11 @@ const STATUS_ORDER = {
 };
 
 const ACTUAL_STATUS_ORDER = {
-    undefined: 0,
-    present: 1,
-    absent: 2
+    absent: 1,
+    present: 2
 };
+
+const actualStatusPriority = (a) => ACTUAL_STATUS_ORDER[a] ?? 0;
 
 const STATUS_COLORS = {
     pending: 'bg-gray-100 text-gray-800',
@@ -409,7 +410,7 @@ const EventDetail = () => {
                         </div>
                     ) : (
                         <div className="divide-y divide-gray-200">
-                            {[...event.attendance].sort((a, b) => ACTUAL_STATUS_ORDER[a.actual_status] - ACTUAL_STATUS_ORDER[b.actual_status]).map((row, index) => (
+                            {[...event.attendance].sort((a, b) => actualStatusPriority(a.actual_status) - actualStatusPriority(b.actual_status)).map((row, index) => (
                                 <div key={row.id} className="px-4 py-2 flex items-center justify-between gap-3">
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm font-medium text-gray-900 truncate">

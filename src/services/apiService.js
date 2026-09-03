@@ -170,12 +170,33 @@ class ApiService {
         return this.client.get('/onboarding/pending-requests');
     }
 
+    async getUnifiedPendingRequests() {
+        return this.client.get('/onboarding/unified-pending-requests');
+    }
+
     async approveOnboardingRequest(requestId) {
         return this.client.post(`/onboarding/requests/${requestId}/approve`);
     }
 
     async rejectOnboardingRequest(requestId, reason) {
         return this.client.post(`/onboarding/requests/${requestId}/reject`, { reason });
+    }
+
+    // Role Change
+    async requestRoleChange(requestedRole, reason) {
+        return this.client.post('/onboarding/role-change', { requestedRole, reason });
+    }
+
+    async getRoleChangeRequests() {
+        return this.client.get('/onboarding/role-change/requests');
+    }
+
+    async approveRoleChange(requestId) {
+        return this.client.post(`/onboarding/role-change/${requestId}/approve`);
+    }
+
+    async rejectRoleChange(requestId) {
+        return this.client.post(`/onboarding/role-change/${requestId}/reject`);
     }
 
     // === GROUP ENDPOINTS ===

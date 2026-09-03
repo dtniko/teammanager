@@ -1,16 +1,30 @@
 const webpush = require('web-push');
 const { query } = require('../config/database');
 
-webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT,
-    process.env.VAPID_PUBLIC_KEY,
-    process.env.VAPID_PRIVATE_KEY
-);
+// Configura le VAPID solo se presente la chiave pubblica: web-push
+// lancia un errore a load-time se una di subject/publicKey/privateKey
+// e' vuota, e non vogliamo che un'opzione manchi fermi l'intero server.
+// Se non sono configurate, le push restano disabilitate (coerente con
+// il frontend, che gia' gestisce l'assenza della public key con un warning).
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+        process.env.VAPID_SUBJECT || 'mailto:admin@localhost',
+        process.env.VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY
+    );
+} else {
+    console.warn('⚠️ Chiavi VAPID non configurate: push notification disabilitate');
+}
 
 // Invia una push a tutte le subscription di un utente.
 // Isola i fallimenti per singola subscription (Promise.allSettled): un
 // endpoint scaduto/revocato non deve impedire l'invio agli altri device.
+const vapidConfigured = Boolean(process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+
 async function sendPushToUser(userId, payload) {
+    if (!vapidConfigured) {
+        return;
+    }
     try {
         const subscriptionsResult = await query(
             'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1',

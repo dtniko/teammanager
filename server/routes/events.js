@@ -13,7 +13,8 @@ router.get('/', async (req, res) => {
             endDate,
             groupId,
             eventType,
-            limit = 50
+            limit = 50,
+            athleteId
         } = req.query;
 
         let whereConditions = ['e.is_active = true'];
@@ -74,11 +75,16 @@ router.get('/', async (req, res) => {
         } else {
             // Se non è specificato un gruppo, filtra per i gruppi accessibili all'utente
             if (req.user.role === 'parent') {
+                const athleteFilter = athleteId
+                    ? `AND pa.athlete_id = $${paramIndex}`
+                    : '';
+                if (athleteId) { paramIndex++; queryParams.push(athleteId); }
+
                 whereConditions.push(`e.group_id IN (
-          SELECT DISTINCT ag.group_id 
+          SELECT DISTINCT ag.group_id
           FROM parent_athlete pa
           JOIN athlete_group ag ON pa.athlete_id = ag.athlete_id
-          WHERE pa.parent_id = $${paramIndex} AND ag.is_active = true
+          WHERE pa.parent_id = $${paramIndex} AND ag.is_active = true ${athleteFilter}
         )`);
                 queryParams.push(req.user.id);
                 paramIndex++;
@@ -131,21 +137,37 @@ router.get('/', async (req, res) => {
             paramIndex++;
         }
 
+        // Per i genitori: nomi degli atleti collegati che partecipano al gruppo dell'evento
+        // (parametro dedicato, pushato PRIMA del LIMIT)
+        let parentAthleteNamesSelect = '';
+        if (req.user.role === 'parent') {
+            parentAthleteNamesSelect = `(
+          SELECT STRING_AGG(DISTINCT a.first_name || ' ' || a.last_name, ', ')
+          FROM parent_athlete pa
+          JOIN athletes a ON a.id = pa.athlete_id
+          JOIN athlete_group ag ON a.id = ag.athlete_id
+          WHERE pa.parent_id = $${paramIndex} AND ag.group_id = e.group_id
+        ) as parent_athlete_names,`;
+            queryParams.push(req.user.id);
+            paramIndex++;
+        }
+
         const eventsQuery = `
-      SELECT 
-        e.id, e.title, e.description, e.event_type, 
+      SELECT
+        e.id, e.title, e.description, e.event_type,
         e.start_datetime, e.end_datetime, e.location,
         e.is_recurring, e.recurring_pattern,
         g.id as group_id, g.name as group_name,
         u.first_name as creator_first_name, u.last_name as creator_last_name,
+        ${parentAthleteNamesSelect}
         (
-          SELECT COUNT(*) 
-          FROM attendance a 
+          SELECT COUNT(*)
+          FROM attendance a
           WHERE a.event_id = e.id AND a.status = 'present'
         ) as present_count,
         (
-          SELECT COUNT(*) 
-          FROM attendance a 
+          SELECT COUNT(*)
+          FROM attendance a
           WHERE a.event_id = e.id AND a.status = 'absent'
         ) as absent_count,
         (

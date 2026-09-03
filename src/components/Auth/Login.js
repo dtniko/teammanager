@@ -7,7 +7,7 @@ import LoadingSpinner from '../Common/LoadingSpinner';
 // Il client OAuth Google configurato e' stato eliminato lato Google Cloud Console:
 // tenere il bottone attivo genera un loop di richieste fallite verso accounts.google.com.
 // Riattivare non appena viene configurato un nuovo client valido in GOOGLE_CLIENT_ID.
-const GOOGLE_SIGNIN_ENABLED = false;
+const GOOGLE_SIGNIN_ENABLED = true;
 
 const Login = () => {
     const { loginWithGoogle, login } = useAuth();
@@ -216,17 +216,18 @@ const Login = () => {
                 </div>
 
                 {/* Right Panel - Login Form */}
-                <div className="flex-1 flex flex-col justify-center px-8 py-16 lg:px-12">
+                <div className="flex-1 flex flex-col justify-center px-8 py-8 lg:py-16 lg:px-12">
                     <div className="w-full max-w-md mx-auto">
                         {/* Mobile Logo */}
-                        <div className="lg:hidden flex items-center justify-center mb-8">
+                        <div className="lg:hidden flex flex-col items-center justify-center mb-6">
+                            <span className="text-lg font-bold text-gray-900 mb-4">Team Sport Manager</span>
                             <div className="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center">
                                 <Shield className="h-8 w-8 text-white" />
                             </div>
                         </div>
 
-                        {/* Header */}
-                        <div className="text-center mb-8">
+                        {/* Desktop Header */}
+                        <div className="hidden lg:block text-center mb-8">
                             <h2 className="text-3xl font-bold text-gray-900 mb-2">
                                 Accedi alla piattaforma
                             </h2>
@@ -271,7 +272,7 @@ const Login = () => {
                             )}
 
                             {/* Email/Password Login Form */}
-                            <form onSubmit={handleCredentialsLogin} className="space-y-4">
+                            <form onSubmit={handleCredentialsLogin} className="space-y-4 pb-6">
                                 <div>
                                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                                         Email
@@ -315,52 +316,37 @@ const Login = () => {
                                 </button>
                             </form>
 
-                            {/* Divider */}
-                            <div className="relative">
+                            {/* Mobile divider before PWA card */}
+                            <div className="lg:hidden relative">
                                 <div className="absolute inset-0 flex items-center">
                                     <div className="w-full border-t border-gray-300" />
                                 </div>
-                                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">
-                    Prima volta qui?
-                  </span>
+                            </div>
+
+                            {/* Spacer — forza spazio su mobile (space-y sovrascrive mt) */}
+                            <div className="lg:hidden h-8" />
+
+                            {/* PWA Card — mobile only, shown below "Accendi" */}
+                            <div className="lg:hidden p-5 bg-gradient-to-r from-blue-500 to-blue-700 rounded-2xl shadow-lg">
+                                <div className="flex items-center space-x-3">
+                                    <Smartphone className="h-5 w-5 text-white flex-shrink-0" />
+                                    <div>
+                                        <p className="text-white text-sm font-semibold">App Web Progressiva</p>
+                                        <p className="text-blue-100 text-xs">Installabile su smartphone e tablet</p>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Info per nuovi utenti */}
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                <h3 className="text-sm font-medium text-blue-900 mb-2">
-                                    Nuovo utente?
-                                </h3>
-                                <p className="text-sm text-blue-700 mb-3">
-                                    Effettua il login con Google per creare automaticamente il tuo account.
-                                    Verrà creato come "Genitore" e potrai essere associato ai tuoi atleti dall'amministratore.
-                                </p>
-                                <ul className="text-xs text-blue-600 space-y-1">
-                                    <li>• Account sicuro con Google OAuth</li>
-                                    <li>• Nessuna password da ricordare</li>
-                                    <li>• Accesso immediato alle funzionalità</li>
-                                </ul>
-                            </div>
-
-                            {/* TODO temporaneo: rimuovere quando non serve piu' per il debug */}
-                            <button
-                                type="button"
-                                onClick={handleClearCache}
-                                disabled={clearingCache}
-                                className="w-full text-xs text-gray-400 hover:text-gray-600 underline disabled:opacity-50"
-                            >
-                                {clearingCache ? 'Pulizia in corso...' : '🧹 Pulisci cache/service worker e ricarica (debug)'}
-                            </button>
-
-                            {/* Support Info */}
-                            <div className="text-center">
-                                <p className="text-sm text-gray-500">
-                                    Problemi di accesso?{' '}
-                                    <a href="mailto:supporto@sportclub.it" className="text-blue-600 hover:text-blue-500">
-                                        Contatta il supporto
-                                    </a>
-                                </p>
+                            {/* Desktop support & legal */}
+                            <div className="hidden lg:block mt-6">
+                                <div className="text-center">
+                                    <p className="text-sm text-gray-500">
+                                        Problemi di accesso?{' '}
+                                        <a href="mailto:supporto@sportclub.it" className="text-blue-600 hover:text-blue-500">
+                                            Contatta il supporto
+                                        </a>
+                                    </p>
+                                </div>
                             </div>
                         </div>
 

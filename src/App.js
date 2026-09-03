@@ -19,6 +19,7 @@ import AthleteDetail from './components/Athletes/AthleteDetail';
 import AthleteForm from './components/Athletes/AthleteForm';
 import CalendarPage from './components/Calendar/CalendarPage';
 import EventDetail from './components/Calendar/EventDetail';
+import EventForm from './components/Events/EventForm';
 import Users from './components/Users/Users';
 import Groups from './components/Groups/Groups';
 import GroupDetail from './components/Groups/GroupDetail';
@@ -46,7 +47,7 @@ function App() {
                         <AppRoutes />
                         <ToastContainer
                             position="top-right"
-                            autoClose={8000}
+                            autoClose={1500}
                             hideProgressBar={false}
                             newestOnTop={false}
                             closeOnClick
@@ -116,6 +117,7 @@ function AppRoutes() {
                 <Route path="/athletes/:athleteId" element={<AthleteDetail />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/calendar/:eventId" element={<EventDetail />} />
+                <Route path="/events/new" element={user.role === 'admin' || user.role === 'coach' ? <EventForm /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/users" element={user.role === 'admin' ? <Users /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/groups" element={(user.role === 'admin' || user.role === 'coach') ? <Groups /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/groups/:groupId" element={(user.role === 'admin' || user.role === 'coach') ? <GroupDetail /> : <Navigate to="/dashboard" replace />} />
