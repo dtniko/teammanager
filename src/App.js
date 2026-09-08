@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -20,25 +20,23 @@ import AthleteForm from './components/Athletes/AthleteForm';
 import CalendarPage from './components/Calendar/CalendarPage';
 import EventDetail from './components/Calendar/EventDetail';
 import EventForm from './components/Events/EventForm';
+import Communications from './components/Communications/Communications';
+import CommunicationNew from './components/Communications/CommunicationNew';
+import CommunicationDetail from './components/Communications/CommunicationDetail';
 import Users from './components/Users/Users';
 import Groups from './components/Groups/Groups';
 import GroupDetail from './components/Groups/GroupDetail';
 import Seasons from './components/Seasons/Seasons';
 import AttendanceReport from './components/Reports/AttendanceReport';
 import NotificationsPage from './components/Notifications/NotificationsPage';
+import GroupPushNew from './components/Notifications/GroupPushNew';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import Profile from './components/Profile/Profile';
 
-// Services
-import { registerServiceWorker } from './utils/serviceWorker';
+// La registrazione del service worker è in src/index.js (unica):
+// qui era duplicata.
 
 function App() {
-    useEffect(() => {
-        if (process.env.NODE_ENV === 'production') {
-            registerServiceWorker();
-        }
-    }, []);
-
     return (
         <AuthProvider>
             <NotificationProvider>
@@ -117,6 +115,9 @@ function AppRoutes() {
                 <Route path="/athletes/:athleteId" element={<AthleteDetail />} />
                 <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/calendar/:eventId" element={<EventDetail />} />
+                <Route path="/communications" element={<Communications />} />
+                <Route path="/communications/new" element={user.role === 'admin' || user.role === 'coach' ? <CommunicationNew /> : <Navigate to="/dashboard" replace />} />
+                <Route path="/communications/:id" element={<CommunicationDetail />} />
                 <Route path="/events/new" element={user.role === 'admin' || user.role === 'coach' ? <EventForm /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/users" element={user.role === 'admin' ? <Users /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/groups" element={(user.role === 'admin' || user.role === 'coach') ? <Groups /> : <Navigate to="/dashboard" replace />} />
@@ -125,6 +126,7 @@ function AppRoutes() {
                 <Route path="/reports/attendance" element={(user.role === 'admin' || user.role === 'coach') ? <AttendanceReport /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/pending-approvals" element={(user.role === 'admin' || user.role === 'coach') ? <PendingApprovals /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/notifications/broadcast" element={user.role === 'admin' || user.role === 'coach' ? <GroupPushNew /> : <Navigate to="/dashboard" replace />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

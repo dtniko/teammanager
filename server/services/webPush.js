@@ -56,6 +56,7 @@ async function sendPushToUser(userId, payload) {
                 const statusCode = result.reason?.statusCode;
                 if (statusCode === 404 || statusCode === 410) {
                     const endpoint = subscriptionsResult.rows[index].endpoint;
+                    console.log(`Push subscription rimossa (token scaduto/revocato ${statusCode}):`, endpoint);
                     await query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
                 } else {
                     console.error('Errore nell\'invio della push notification:', result.reason);
@@ -71,4 +72,34 @@ async function sendPushToUsers(userIds, payload) {
     await Promise.allSettled(userIds.map((userId) => sendPushToUser(userId, payload)));
 }
 
-module.exports = { sendPushToUser, sendPushToUsers };
+// Push agli admin attivi senza creare righe in-app. Si usa per gli eventi
+// "in entrata" che non hanno una notifica in-app dedicata (es. nuovi
+// profili atleta, nuove registrazioni): non va usato dove l'admin riceve
+// già la push con la notifica in-app, per non duplicarla. I fallimenti sono
+// assorbiti (come in sendPushToUser).
+async function sendStaffPush({ title, body, url = '/notifications' }) {
+    if (!vapidConfigured) {
+        return;
+    }
+    try {
+        const result = await query(
+            "SELECT id FROM users WHERE is_active = true AND role = 'admin'"
+        );
+        const ids = result.rows.map(r => r.id);
+
+        if (ids.length === 0) {
+            return;
+        }
+
+        await sendPushToUsers(ids, { title, body, url });
+    } catch (error) {
+        console.error('Errore nell\'invio della push agli admin:', error);
+    }
+}
+
+module.exports = {
+    sendPushToUser,
+    sendPushToUsers,
+    sendStaffPush,
+    isVapidConfigured: () => vapidConfigured
+};

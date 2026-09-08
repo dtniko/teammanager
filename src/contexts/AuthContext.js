@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import apiService from '../services/apiService';
+import { isUpdateAvailable, recordVersion } from '../utils/versionCheck';
 
 const AuthContext = createContext();
 
@@ -88,6 +89,17 @@ export const AuthProvider = ({ children }) => {
                 setUser(userData);
                 fetchOnboardingStatus();
 
+                // Check versione: confronta con quella registrata al load
+                // precedente. Ordine importante: isUpdateAvailable PRIMA di
+                // recordVersion (altrimenti il confronto sarebbe sempre falso)
+                const needsReload = isUpdateAvailable();
+                recordVersion();
+                if (needsReload) {
+                    if (window.confirm("E' disponibile una nuova versione dell'app. Ricaricare ora?")) {
+                        window.location.reload();
+                    }
+                }
+
                 toast.success(`Benvenuto, ${userData.firstName}!`);
                 return { success: true };
             } else {
@@ -114,6 +126,17 @@ export const AuthProvider = ({ children }) => {
                 setToken(newToken);
                 setUser({ ...userData, mustChangePassword: !!mustChangePassword });
                 fetchOnboardingStatus();
+
+                // Check versione: confronta con quella registrata al load
+                // precedente. Ordine importante: isUpdateAvailable PRIMA di
+                // recordVersion (altrimenti il confronto sarebbe sempre falso)
+                const needsReload = isUpdateAvailable();
+                recordVersion();
+                if (needsReload) {
+                    if (window.confirm("E' disponibile una nuova versione dell'app. Ricaricare ora?")) {
+                        window.location.reload();
+                    }
+                }
 
                 toast.success(`Benvenuto, ${userData.firstName}!`);
                 return { success: true };

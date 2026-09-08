@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { verifyGoogleToken, authenticateToken } = require('../middleware/auth');
 const { query } = require('../config/database');
+const { sendStaffPush } = require('../services/webPush');
 
 const router = express.Router();
 
@@ -138,19 +139,26 @@ router.post('/google', async (req, res) => {
         if (userResult.rows.length === 0) {
             // Nuovo utente - crea un account come genitore di default
             const insertResult = await query(`
-        INSERT INTO users (google_id, email, first_name, last_name, role, avatar_url) 
-        VALUES ($1, $2, $3, $4, 'parent', $5) 
+        INSERT INTO users (google_id, email, first_name, last_name, role, avatar_url)
+        VALUES ($1, $2, $3, $4, 'parent', $5)
         RETURNING id, email, first_name, last_name, role, is_active
       `, [
                 googleUser.googleId,
                 googleUser.email,
-                googleUser.firstName,
-                googleUser.lastName,
+                googleUser.firstName || '',
+                googleUser.lastName || '',
                 googleUser.avatarUrl
             ]);
 
             user = insertResult.rows[0];
             console.log(`👤 Nuovo utente registrato: ${user.email} (${user.role})`);
+
+            // Push all'admin: nuovo utente registrato via Google
+            sendStaffPush({
+                title: 'Nuovo utente registrato',
+                body: `${googleUser.firstName || ''} ${googleUser.lastName || ''}`.trim() || user.email,
+                url: '/users'
+            });
         } else {
             user = userResult.rows[0];
 

@@ -167,12 +167,7 @@ const EventDetail = () => {
         }
     };
 
-    const toDatetimeLocal = (isoString) => {
-        const date = parseISO(isoString);
-        const offset = date.getTimezoneOffset();
-        const local = new Date(date.getTime() - offset * 60000);
-        return local.toISOString().slice(0, 16);
-    };
+    const toDatetimeLocal = (value) => String(value).slice(0, 16);
 
     const openEditForm = () => {
         setEditForm({
@@ -424,9 +419,22 @@ const EventDetail = () => {
                                         {STATUS_LABELS[row.status]}
                                     </span>
                                     <button
-                                        onClick={() => handleMarkActualAttendance(row.athlete_id, row.actual_status === 'present' ? 'absent' : 'present')}
-                                        title={row.actual_status ? ACTUAL_STATUS_LABELS[row.actual_status] : 'Da confermare — clicca per segnare presente'}
-                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${
+                                        onClick={(e) => {
+                                            const rect = e.currentTarget.getBoundingClientRect();
+                                            const inRightHalf = (e.clientX - rect.left) > rect.width / 2;
+                                            // Zona destra = presente, sinistra = assente;
+                                            // se clicchi lo stato già attivo si azzera su "in attesa"
+                                            const next = (inRightHalf ? 'present' : 'absent') === row.actual_status ? null : (inRightHalf ? 'present' : 'absent');
+                                            handleMarkActualAttendance(row.athlete_id, next);
+                                        }}
+                                        title={
+                                            row.actual_status === null
+                                                ? 'Da confermare — clicca a destra per presente, a sinistra per assente'
+                                                : row.actual_status === 'present'
+                                                    ? 'Presente — clicca di nuovo per annullare, a sinistra per assente'
+                                                    : 'Assente — clicca di nuovo per annullare, a destra per presente'
+                                        }
+                                        className={`relative inline-flex h-6 w-12 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${
                                             row.actual_status === 'present'
                                                 ? 'bg-green-500'
                                                 : row.actual_status === 'absent'
@@ -435,8 +443,12 @@ const EventDetail = () => {
                                         }`}
                                     >
                                         <span
-                                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                                                row.actual_status === 'present' ? 'translate-x-6' : 'translate-x-1'
+                                            className={`inline-block h-4 w-4 transform rounded-full shadow transition-transform ${
+                                                row.actual_status === null
+                                                    ? 'translate-x-4 bg-amber-400'
+                                                    : row.actual_status === 'present'
+                                                        ? 'translate-x-[30px] bg-white'
+                                                        : 'translate-x-[2px] bg-white'
                                             }`}
                                         />
                                     </button>

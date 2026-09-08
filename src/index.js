@@ -7,6 +7,10 @@ import { registerServiceWorker, unregisterServiceWorker } from './utils/serviceW
 // Performance monitoring (opzionale)
 import { getCLS, getFID, getFCP, getLCP, getTTFB } from 'web-vitals';
 
+// Versione dell'app baked a build time (Dockerfile: REACT_APP_APP_VERSION
+// da --build-arg APP_VERSION). 'dev' in sviluppo locale senza la variabile.
+window.__BUILD_VERSION__ = process.env.REACT_APP_APP_VERSION || 'dev';
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 root.render(
@@ -84,55 +88,28 @@ window.addEventListener('offline', () => {
     // Puoi mostrare una notifica o aggiornare l'UI
 });
 
-// Gestione installazione PWA
-let deferredPrompt;
-
-window.addEventListener('beforeinstallprompt', (e) => {
-    // Previeni il prompt automatico
-    e.preventDefault();
-    // Salva l'evento per poterlo triggerare successivamente
-    deferredPrompt = e;
-
-    // Opzionalmente, mostra il tuo pulsante di installazione personalizzato
-    const installButton = document.getElementById('pwa-install-button');
-    if (installButton) {
-        installButton.style.display = 'block';
-
-        installButton.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                console.log(`🎯 PWA install prompt: ${outcome}`);
-                deferredPrompt = null;
-                installButton.style.display = 'none';
-            }
-        });
-    }
-});
-
-window.addEventListener('appinstalled', () => {
-    console.log('✅ PWA installata con successo');
-    deferredPrompt = null;
-
-    const installButton = document.getElementById('pwa-install-button');
-    if (installButton) {
-        installButton.style.display = 'none';
-    }
-
-    // Opzionalmente, mostra un messaggio di ringraziamento
-    // o traccia l'evento in analytics
-});
+// La gestione del prompt di installazione PWA vive in
+// PWAInstallManager (src/utils/serviceWorker.js), istanziato come
+// singleton e consumato dai componenti UI tramite usePWAInstall.
 
 // Gestione aggiornamenti dell'app (solo in produzione: in sviluppo il service worker
 // viene sempre disattivato sopra, quindi questo evento non deve mai scattare)
 if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-        // Un nuovo service worker ha preso il controllo
-        console.log('🔄 Nuovo service worker attivo');
+    // Letto una tantum al boot: distingue il primo install (il controller
+    // passa da null a SW, scatta controllerchange anche per chi non ha
+    // mai avuto una versione) da un update reale (controller già presente)
+    let hadController = !!navigator.serviceWorker.controller;
 
-        // Opzionalmente, ricarica la pagina o mostra una notifica
-        if (window.confirm('È disponibile una nuova versione dell\'app. Vuoi ricaricare?')) {
-            window.location.reload();
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (hadController) {
+            // Un nuovo service worker ha preso il controllo: la notifica e
+            // il banner con il pulsante "Aggiorna" sono già gestiti dal
+            // flusso updatefound in src/utils/serviceWorker.js
+            console.info('Service worker aggiornato, controller attivo');
+        } else {
+            // Primo install: nessun messaggio all'utente
+            console.info('Primo install SW, controller attivo');
+            hadController = true;
         }
     });
 }

@@ -30,7 +30,11 @@ const AthleteForm = () => {
     const [loading, setLoading] = useState(isEditMode);
     const [saving, setSaving] = useState(false);
 
-    const canManage = user.role === 'admin' || user.role === 'coach';
+    // In modifica, anche genitore/collegato ad un atleta possono accedere:
+    // il backend (canAccessAthlete) verifica il collegamento effettivo.
+    // In creazione resta riservata ad admin e coach.
+    const canManage =
+        isEditMode || user.role === 'admin' || user.role === 'coach';
 
     useEffect(() => {
         if (!canManage) {

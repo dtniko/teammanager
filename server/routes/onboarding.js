@@ -2,8 +2,13 @@ const express = require('express');
 const { query, getClient } = require('../config/database');
 const { requireRole } = require('../middleware/auth');
 const { createBulkNotifications } = require('./notifications');
+const { sendStaffPush } = require('../services/webPush');
 
 const router = express.Router();
+
+// Nome di visualizzazione dell'utente (req.user espone firstName/lastName)
+const displayName = (user) =>
+    user && user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.email;
 
 // Stato onboarding dell'utente corrente
 router.get('/status', async (req, res) => {
@@ -211,6 +216,8 @@ router.post('/link-existing', async (req, res) => {
                     'profile_link_request',
                     linkRequest.id
                 );
+                // La web push all'admin parte già con la notifica in-app
+                // sopra (destinatari admin+coach con subscription attiva)
             }
         } catch (notificationError) {
             console.error('Errore nell\'invio delle notifiche di collegamento profilo:', notificationError);
@@ -273,6 +280,13 @@ router.post('/create-profile', async (req, res) => {
 
             await client.query('COMMIT');
 
+            // Push all'admin: nuovo atleta registrato con account
+            sendStaffPush({
+                title: 'Nuovo profilo atleta',
+                body: `${firstName} ${lastName} ha creato un profilo atleta con account`,
+                url: '/athletes'
+            });
+
             return res.status(201).json({
                 success: true,
                 athlete: athleteResult.rows[0]
@@ -299,6 +313,13 @@ router.post('/create-profile', async (req, res) => {
     `, [userId, athlete.id, relationship]);
 
         await client.query('COMMIT');
+
+        // Push all'admin: genitore che crea il profilo di un atleta
+        sendStaffPush({
+            title: 'Nuovo profilo atleta',
+            body: `${displayName(req.user)} ha creato il profilo di ${athlete.first_name} ${athlete.last_name}`,
+            url: '/athletes'
+        });
 
         res.status(201).json({
             success: true,
@@ -553,8 +574,9 @@ router.post('/role-change', async (req, res) => {
             if (adminIds.length > 0) {
                 const roleName = requestedRole === 'admin' ? 'amministratore' : 'allenatore/dirigente';
                 const title = `Nuova richiesta ruolo ${roleName}`;
-                const message = `${req.user.first_name || req.user.email} ha richiesto il ruolo di ${roleName}`;
+                const message = `${displayName(req.user)} ha richiesto il ruolo di ${roleName}`;
 
+                // La web push all'admin parte con la notifica in-app
                 await createBulkNotifications(
                     adminIds,
                     title,

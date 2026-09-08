@@ -1,7 +1,21 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
+
+// Versione del deployment: letta da build/package.json (generato dal
+// Dockerfile via --build-arg APP_VERSION); fallback '0.0.0' in sviluppo
+const APP_VERSION = (() => {
+    try {
+        const pkgPath = path.join(__dirname, '..', 'build', 'package.json');
+        if (fs.existsSync(pkgPath)) {
+            const pkg = require(pkgPath);
+            if (pkg && pkg.version) return pkg.version;
+        }
+    } catch { /* fall back */ }
+    return '0.0.0';
+})();
 
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
@@ -51,12 +65,28 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Versione del deployment corrente (usata dal frontend per i check di aggiornamento)
+app.get('/api/version', (req, res) => {
+    res.json({ version: APP_VERSION, timestamp: new Date().toISOString() });
+});
+
 // Serve React app SOLO in production
 // NB: registrato DOPO tutte le route /api/* così il catch-all '*' non le intercetta
 console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
 if (process.env.NODE_ENV === 'production') {
     console.log('📦 Serving React build files');
-    app.use(express.static(path.join(__dirname, '../build')));
+
+    // Asset hashati (nome cambia a ogni build): cache aggressiva e immutabile.
+    // Si imposta con setHeaders (chiamato da serve-static DOPO l'header
+    // default): un middleware che fa res.set prima di next() verrebbe
+    // sovrascritto dal Cache-Control che serve-static applica di default.
+    app.use(express.static(path.join(__dirname, '../build'), {
+        setHeaders(res, filePath) {
+            if (/\/static\/(js|css)\//.test(filePath)) {
+                res.set('Cache-Control', 'public, max-age=31536000, immutable');
+            }
+        }
+    }));
 
     app.get('*', (req, res) => {
         res.sendFile(path.join(__dirname, '../build', 'index.html'));

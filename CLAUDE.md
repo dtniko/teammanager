@@ -19,12 +19,15 @@ docker-compose).
 - Artifact Registry (repo Docker): `europe-west8-docker.pkg.dev/sportclub-manager-app/sportclub-manager/app`
 - Secret Manager: `sportclub-database-url` (Supabase DATABASE_URL),
   `sportclub-jwt-secret` (JWT_SECRET **dedicato alla produzione**, diverso da
-  quello di sviluppo in `.env`) — il service account Cloud Run di default
+  quello di sviluppo in `.env`), `vapid-*` (3 secret VAPID per le notifiche
+  push: `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, nomi uid
+  `vapid-19fdb2cf/…d0/…d1`) — il service account Cloud Run di default
   (`<project-number>-compute@developer.gserviceaccount.com`) ha il ruolo
-  `roles/secretmanager.secretAccessor` su entrambi.
-- Env vars runtime (non-segrete) impostate su Cloud Run:
+  `roles/secretmanager.secretAccessor` su tutti.
+- Env vars runtime impostate su Cloud Run:
   `NODE_ENV=production`, `GOOGLE_CLIENT_ID`, `FRONTEND_URL` (= URL Cloud Run
-  stesso, per CORS).
+  stesso, per CORS), `VAPID_SUBJECT`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
+  (via secret), `NODE_OPTIONS=--no-warnings`.
 
 ### gcloud CLI su questa macchina Windows
 Installato via `winget install --id Google.CloudSDK`. Il PATH utente viene
@@ -47,6 +50,10 @@ export PATH="$PATH:/c/Users/rstimpfl/AppData/Local/Google/Cloud SDK/google-cloud
 SUPABASE_URL=$(grep "^REACT_APP_SUPABASE_URL=" .env | cut -d= -f2-)
 SUPABASE_ANON=$(grep "^REACT_APP_SUPABASE_ANON_KEY=" .env | cut -d= -f2-)
 GOOGLE_CLIENT_ID_FE=$(grep "^REACT_APP_GOOGLE_CLIENT_ID=" .env | cut -d= -f2-)
+# La pubblica VAPID baked è quella di PRODUZIONE (Secret Manager): è il
+# fallback; la chiave usata a runtime arriva da /push-status.
+VAPID_PUBLIC_FE=$(gcloud secrets versions access latest --secret=vapid-public-key | tr -d '\n')
+APP_VERSION=$(git rev-parse --short HEAD)
 IMAGE="europe-west8-docker.pkg.dev/sportclub-manager-app/sportclub-manager/app:latest"
 
 # IMPORTANTE: MSYS_NO_PATHCONV=1 SOLO per il docker build (vedi bug sotto),
@@ -57,6 +64,8 @@ docker build --target production \
   --build-arg REACT_APP_SUPABASE_URL="$SUPABASE_URL" \
   --build-arg REACT_APP_SUPABASE_ANON_KEY="$SUPABASE_ANON" \
   --build-arg REACT_APP_GOOGLE_CLIENT_ID="$GOOGLE_CLIENT_ID_FE" \
+  --build-arg REACT_APP_VAPID_PUBLIC_KEY="$VAPID_PUBLIC_FE" \
+  --build-arg APP_VERSION="$APP_VERSION" \
   -t "$IMAGE" .
 docker push "$IMAGE"
 unset MSYS_NO_PATHCONV
@@ -67,10 +76,12 @@ gcloud run deploy sportclub-manager --image="$IMAGE" --region=europe-west8 --pla
 Verifica rapida dopo ogni deploy:
 ```bash
 curl -s https://sportclub-manager-321154544822.europe-west8.run.app/api/health
+curl -s https://sportclub-manager-321154544822.europe-west8.run.app/api/version
 ```
-Deve rispondere JSON `{"status":"OK",...}`, non l'HTML della SPA (vedi bug
-catch-all sotto — se torna HTML, l'ordine delle route in `server/index.js` si
-è rotto di nuovo).
+`/api/health` deve rispondere JSON `{"status":"OK",...}`, non l'HTML della
+SPA (vedi bug catch-all sotto — se torna HTML, l'ordine delle route in
+`server/index.js` si è rotto di nuovo). `/api/version` deve rispondere
+`{"version":"<APP_VERSION>",...}` con lo short hash del commit deployato.
 
 ### Log in tempo reale
 ```bash

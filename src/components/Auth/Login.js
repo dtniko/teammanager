@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, Calendar, FileText, Bell, Smartphone } from 'lucide-react';
+import { Shield, Users, Calendar, FileText, Bell } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
 import LoadingSpinner from '../Common/LoadingSpinner';
+import PWAInstallCard from '../Common/PWAInstallCard';
 
 // Il client OAuth Google configurato e' stato eliminato lato Google Cloud Console:
 // tenere il bottone attivo genera un loop di richieste fallite verso accounts.google.com.
@@ -201,16 +202,8 @@ const Login = () => {
                                 })}
                             </div>
 
-                            {/* PWA Info */}
-                            <div className="mt-12 p-4 bg-blue-500 bg-opacity-20 rounded-lg border border-blue-400 border-opacity-30">
-                                <div className="flex items-center space-x-3">
-                                    <Smartphone className="h-5 w-5 text-blue-200" />
-                                    <div>
-                                        <p className="text-white text-sm font-medium">App Web Progressiva</p>
-                                        <p className="text-blue-100 text-xs">Installabile su smartphone e tablet</p>
-                                    </div>
-                                </div>
-                            </div>
+                            {/* PWA: card informativa + pulsante di installazione (quando disponibile) */}
+                            <PWAInstallCard variant="desktop" />
                         </div>
                     </div>
                 </div>
@@ -326,15 +319,9 @@ const Login = () => {
                             {/* Spacer — forza spazio su mobile (space-y sovrascrive mt) */}
                             <div className="lg:hidden h-8" />
 
-                            {/* PWA Card — mobile only, shown below "Accendi" */}
-                            <div className="lg:hidden p-5 bg-gradient-to-r from-blue-500 to-blue-700 rounded-2xl shadow-lg">
-                                <div className="flex items-center space-x-3">
-                                    <Smartphone className="h-5 w-5 text-white flex-shrink-0" />
-                                    <div>
-                                        <p className="text-white text-sm font-semibold">App Web Progressiva</p>
-                                        <p className="text-blue-100 text-xs">Installabile su smartphone e tablet</p>
-                                    </div>
-                                </div>
+                            {/* PWA Card — mobile only, shown below "Accedi", con pulsante di installazione */}
+                            <div className="lg:hidden">
+                                <PWAInstallCard />
                             </div>
 
                             {/* Desktop support & legal */}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
     Users,
     Search,
@@ -13,6 +13,8 @@ import {
     MapPin,
     UserCheck,
     UserX,
+    Trash2,
+    RotateCcw,
     Download,
     Upload
 } from 'lucide-react';
@@ -25,6 +27,7 @@ import { it } from 'date-fns/locale';
 
 const Athletes = () => {
     const { user } = useAuth();
+    const navigate = useNavigate();
     const [athletes, setAthletes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -146,6 +149,38 @@ const Athletes = () => {
     const sortedAthletes = useMemo(() => {
         return [...athletes].sort((a, b) => new Date(a.date_of_birth) - new Date(b.date_of_birth));
     }, [athletes]);
+
+    const getApiErrorMessage = (error, fallback) => {
+        return error?.response?.data?.error || fallback;
+    };
+
+    const handleDeactivateAthlete = async (athlete) => {
+        if (!window.confirm(
+            `Disattivare ${athlete.first_name} ${athlete.last_name}? L'atleta verrà nascosto dalle liste ma la storia resterà salvata. Potrà essere riattivato in seguito.`
+        )) {
+            return;
+        }
+
+        try {
+            await apiService.deleteAthlete(athlete.id);
+            toast.success('Atleta disattivato');
+            loadAthletes();
+        } catch (error) {
+            console.error('Errore nella disattivazione dell\'atleta:', error);
+            toast.error(getApiErrorMessage(error, 'Errore nella disattivazione dell\'atleta'));
+        }
+    };
+
+    const handleReactivateAthlete = async (athlete) => {
+        try {
+            await apiService.reactivateAthlete(athlete.id);
+            toast.success('Atleta riattivato');
+            loadAthletes();
+        } catch (error) {
+            console.error('Errore nella riattivazione dell\'atleta:', error);
+            toast.error(getApiErrorMessage(error, 'Errore nella riattivazione dell\'atleta'));
+        }
+    };
 
     const canCreateAthlete = user.role === 'admin' || user.role === 'coach';
     const canEditAthlete = user.role === 'admin' || user.role === 'coach';
@@ -361,23 +396,34 @@ const Athletes = () => {
                                             )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            athlete.is_active
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                        }`}>
-                          {athlete.is_active ? (
-                              <>
-                                  <UserCheck className="h-3 w-3 mr-1" />
-                                  Attivo
-                              </>
-                          ) : (
-                              <>
-                                  <UserX className="h-3 w-3 mr-1" />
-                                  Inattivo
-                              </>
-                          )}
-                        </span>
+                        <div className="flex items-center space-x-1">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                athlete.is_active
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-red-100 text-red-800'
+                            }`}>
+                              {athlete.is_active ? (
+                                  <>
+                                      <UserCheck className="h-3 w-3 mr-1" />
+                                      Attivo
+                                  </>
+                              ) : (
+                                  <>
+                                      <UserX className="h-3 w-3 mr-1" />
+                                      Inattivo
+                                  </>
+                              )}
+                            </span>
+                            {athlete.has_parent === false && (
+                                <span
+                                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                                    title="Nessun genitore associato"
+                                >
+                                    <UserX className="h-3 w-3 mr-1" />
+                                    Senza genitore
+                                </span>
+                            )}
+                        </div>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                             <div className="flex items-center justify-end space-x-2">
@@ -397,6 +443,25 @@ const Athletes = () => {
                                                         <Edit className="h-4 w-4" />
                                                     </Link>
                                                 )}
+                                                {canEditAthlete && (
+                                                    athlete.is_active ? (
+                                                        <button
+                                                            onClick={() => handleDeactivateAthlete(athlete)}
+                                                            className="text-red-600 hover:text-red-900"
+                                                            title="Disattiva"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleReactivateAthlete(athlete)}
+                                                            className="text-green-600 hover:text-green-900"
+                                                            title="Riattiva"
+                                                        >
+                                                            <RotateCcw className="h-4 w-4" />
+                                                        </button>
+                                                    )
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -408,7 +473,13 @@ const Athletes = () => {
                         {/* Mobile Cards */}
                         <div className="lg:hidden space-y-4 p-4">
                             {sortedAthletes.map((athlete, index) => (
-                                <div key={athlete.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                <div
+                                    key={athlete.id}
+                                    onClick={() => navigate(`/athletes/${athlete.id}`)}
+                                    className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
+                                    role="link"
+                                    title="Visualizza dettagli"
+                                >
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center space-x-3">
                                             <span className="text-xs font-medium text-gray-400 w-5 text-right">
@@ -429,31 +500,75 @@ const Athletes = () => {
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center space-x-2">
-                                            <Link
-                                                to={`/athletes/${athlete.id}`}
-                                                className="text-blue-600 hover:text-blue-900"
-                                            >
-                                                <Eye className="h-5 w-5" />
-                                            </Link>
-                                            {canEditAthlete && (
+                                        {canEditAthlete && (
+                                            <div className="flex items-center space-x-2">
                                                 <Link
                                                     to={`/athletes/${athlete.id}/edit`}
                                                     className="text-gray-600 hover:text-gray-900"
+                                                    onClick={(e) => e.stopPropagation()}
                                                 >
                                                     <Edit className="h-5 w-5" />
                                                 </Link>
-                                            )}
-                                        </div>
+                                                {athlete.is_active ? (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeactivateAthlete(athlete);
+                                                        }}
+                                                        className="text-red-600 hover:text-red-900"
+                                                        title="Disattiva"
+                                                    >
+                                                        <Trash2 className="h-5 w-5" />
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleReactivateAthlete(athlete);
+                                                        }}
+                                                        className="text-green-600 hover:text-green-900"
+                                                        title="Riattiva"
+                                                    >
+                                                        <RotateCcw className="h-5 w-5" />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {athlete.groups_names && (
-                                        <div className="mt-2">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {athlete.groups_names}
-                      </span>
-                                        </div>
-                                    )}
+                                    <div className="mt-2 flex items-center flex-wrap gap-1">
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                            athlete.is_active
+                                                ? 'bg-green-100 text-green-800'
+                                                : 'bg-red-100 text-red-800'
+                                        }`}>
+                                          {athlete.is_active ? (
+                                              <>
+                                                  <UserCheck className="h-3 w-3 mr-1" />
+                                                  Attivo
+                                              </>
+                                          ) : (
+                                              <>
+                                                  <UserX className="h-3 w-3 mr-1" />
+                                                  Inattivo
+                                              </>
+                                          )}
+                                        </span>
+                                        {athlete.has_parent === false && (
+                                            <span
+                                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                                                title="Nessun genitore associato"
+                                            >
+                                                <UserX className="h-3 w-3 mr-1" />
+                                                Senza genitore
+                                            </span>
+                                        )}
+                                        {athlete.groups_names && (
+                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {athlete.groups_names}
+                        </span>
+                                        )}
+                                    </div>
 
                                     {(athlete.email || athlete.phone) && (
                                         <div className="mt-3 space-y-1">

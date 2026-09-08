@@ -2,6 +2,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { query, getClient } = require('../config/database');
 const { requireRole, canAccessGroup } = require('../middleware/auth');
+const { notifyEventCreatedOrUpdated, notifyAttendanceChanged } = require('./notifications');
 
 const router = express.Router();
 
@@ -155,7 +156,9 @@ router.get('/', async (req, res) => {
         const eventsQuery = `
       SELECT
         e.id, e.title, e.description, e.event_type,
-        e.start_datetime, e.end_datetime, e.location,
+        TO_CHAR(e.start_datetime, 'YYYY-MM-DD"T"HH24:MI:SS') AS start_datetime,
+        TO_CHAR(e.end_datetime,   'YYYY-MM-DD"T"HH24:MI:SS') AS end_datetime,
+        e.location,
         e.is_recurring, e.recurring_pattern,
         g.id as group_id, g.name as group_name,
         u.first_name as creator_first_name, u.last_name as creator_last_name,
@@ -281,7 +284,11 @@ router.get('/:eventId', async (req, res) => {
         // Ottieni dettagli evento
         const eventResult = await query(`
       SELECT 
-        e.*, 
+        e.id, e.title, e.description, e.event_type,
+        TO_CHAR(e.start_datetime, 'YYYY-MM-DD"T"HH24:MI:SS') AS start_datetime,
+        TO_CHAR(e.end_datetime,   'YYYY-MM-DD"T"HH24:MI:SS') AS end_datetime,
+        e.location, e.is_recurring, e.recurring_pattern, e.recurring_group_id,
+        e.group_id, e.created_by, e.is_active, e.created_at, e.updated_at,
         g.name as group_name,
         u.first_name as creator_first_name, u.last_name as creator_last_name
       FROM events e
@@ -451,6 +458,17 @@ router.post('/', requireRole(['admin', 'coach']), async (req, res) => {
 
         console.log(`📅 ${createdEvents.length} evento/i creato/i: ${createdEvents[0].title} per il ${createdEvents[0].start_datetime}`);
 
+        // Notifica eventi creati (solo per non-ricorrenti, il primo della serie ricorrente)
+        if (!isRecurring) {
+            try {
+                await notifyEventCreatedOrUpdated(
+                    createdEvents[0].id, groupId, req.user.id, eventType
+                );
+            } catch (notifyError) {
+                console.error('Errore nella notifica creazione evento:', notifyError);
+            }
+        }
+
         res.status(201).json({
             success: true,
             event: createdEvents[0],
@@ -492,6 +510,13 @@ router.put('/:eventId', requireRole(['admin', 'coach']), async (req, res) => {
             }
         }
 
+        // Legge lo stato precedente per la notifica di modifica (cosa è cambiato)
+        const previousResult = await query(
+            'SELECT title, event_type, start_datetime, end_datetime, location FROM events WHERE id = $1',
+            [eventId]
+        );
+        const previousEvent = previousResult.rows.length > 0 ? previousResult.rows[0] : null;
+
         const updateResult = await query(`
       UPDATE events SET
         title = $1, description = $2, event_type = $3,
@@ -510,6 +535,15 @@ router.put('/:eventId', requireRole(['admin', 'coach']), async (req, res) => {
         }
 
         console.log(`✏️ Evento aggiornato: ${updateResult.rows[0].title}`);
+
+        // Notifica evento aggiornato
+        try {
+            await notifyEventCreatedOrUpdated(
+                eventId, updateResult.rows[0].group_id, req.user.id, eventType, previousEvent
+            );
+        } catch (notifyError) {
+            console.error('Errore nella notifica aggiornamento evento:', notifyError);
+        }
 
         res.json({
             success: true,
@@ -560,6 +594,15 @@ router.post('/:eventId/attendance', async (req, res) => {
             return res.status(403).json({ error: 'Non puoi segnare la presenza per questo atleta' });
         }
 
+        // Query dello stato precedente (necessario per determinare se inviare notifica)
+        let oldStatus = null;
+        const oldAttendance = await query(`
+      SELECT status FROM attendance WHERE event_id = $1 AND athlete_id = $2
+    `, [eventId, athleteId]);
+        if (oldAttendance.rows.length > 0) {
+            oldStatus = oldAttendance.rows[0].status;
+        }
+
         // Aggiorna o inserisci la presenza
         const attendanceResult = await query(`
       INSERT INTO attendance (event_id, athlete_id, status, notes, marked_by, marked_at)
@@ -574,6 +617,17 @@ router.post('/:eventId/attendance', async (req, res) => {
     `, [eventId, athleteId, status, notes, req.user.id]);
 
         console.log(`✅ Presenza segnata: atleta ${athleteId} -> ${status} per evento ${eventId}`);
+
+        // Notifica cambiamento presenza (admin/coach)
+        if (oldStatus !== status) {
+            try {
+                await notifyAttendanceChanged(
+                    eventId, athleteId, status, oldStatus, req.user.id
+                );
+            } catch (notifyError) {
+                console.error('Errore nella notifica cambiamento presenza:', notifyError);
+            }
+        }
 
         res.json({
             success: true,
@@ -670,9 +724,11 @@ router.post('/:eventId/actual-attendance', requireRole(['admin', 'coach']), asyn
         const { eventId } = req.params;
         const { athleteId, actualStatus } = req.body;
 
-        if (!['present', 'absent'].includes(actualStatus)) {
+        // null/'' = annulla la segnatura (indeterminato)
+        if (actualStatus !== null && actualStatus !== '' && !['present', 'absent'].includes(actualStatus)) {
             return res.status(400).json({ error: 'Status non valido' });
         }
+        const actual = (actualStatus === '' ? null : actualStatus);
 
         const eventResult = await query(
             'SELECT id, group_id FROM events WHERE id = $1 AND is_active = true',
@@ -699,16 +755,16 @@ router.post('/:eventId/actual-attendance', requireRole(['admin', 'coach']), asyn
 
         const attendanceResult = await query(`
       INSERT INTO attendance (event_id, athlete_id, status, actual_status, actual_marked_by, actual_marked_at)
-      VALUES ($1, $2, 'pending', $3, $4, CURRENT_TIMESTAMP)
+      VALUES ($1, $2, 'pending', $3, $4, $5)
       ON CONFLICT (event_id, athlete_id)
       DO UPDATE SET
         actual_status = EXCLUDED.actual_status,
         actual_marked_by = EXCLUDED.actual_marked_by,
         actual_marked_at = EXCLUDED.actual_marked_at
       RETURNING *
-    `, [eventId, athleteId, actualStatus, req.user.id]);
+    `, [eventId, athleteId, actual, actual ? req.user.id : null, actual ? new Date() : null]);
 
-        console.log(`🎯 Presenza reale segnata: atleta ${athleteId} -> ${actualStatus} per evento ${eventId}`);
+        console.log(`🎯 Presenza reale segnata: atleta ${athleteId} -> ${actual || 'indeterminato'} per evento ${eventId}`);
 
         res.json({
             success: true,

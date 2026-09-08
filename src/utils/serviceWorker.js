@@ -8,6 +8,12 @@ const isLocalhost = Boolean(
     )
 );
 
+// Deduplica le notifiche di "nuova versione" all'interno della stessa
+// sessione di pagina: l'evento updatefound può scattare più volte per lo
+// stesso SW in installazione, e senza questo flag l'utente vedrebbe
+// notifiche/banner duplicati. Si resetta al reload, come auspicato.
+let notifiedThisSession = false;
+
 export function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         const publicUrl = new URL(process.env.PUBLIC_URL, window.location.href);
@@ -53,6 +59,19 @@ function registerValidSW(swUrl) {
                     }
                 });
             });
+
+            // L'SW attivo comunica la versione (nome cache) a ogni activate:
+            // la salviamo in localStorage così la pagina sa quale versione è
+            // installata e può deduplicare le notifiche di aggiornamento.
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'sw-activated' && event.data.version) {
+                    try {
+                        localStorage.setItem('sw_last_version', event.data.version);
+                    } catch (err) {
+                        console.warn('⚠️ Impossibile salvare la versione SW:', err);
+                    }
+                }
+            });
         })
         .catch(error => {
             console.error('❌ Errore registrazione Service Worker:', error);
@@ -95,8 +114,15 @@ export function unregisterServiceWorker() {
     }
 }
 
-// Mostra notifica di aggiornamento disponibile
+// Mostra notifica di aggiornamento disponibile (una sola volta per sessione
+// di pagina: più segnali updatefound per lo stesso SW non devono
+// duplicare notifiche e banner)
 function showUpdateAvailableNotification() {
+    if (notifiedThisSession) {
+        return;
+    }
+    notifiedThisSession = true;
+
     if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('Aggiornamento Disponibile', {
             body: 'Una nuova versione dell\'app è disponibile. Ricarica la pagina per aggiornare.',
@@ -109,9 +135,12 @@ function showUpdateAvailableNotification() {
     showUpdateBanner();
 }
 
-// Mostra banner per aggiornamento
-function showUpdateBanner() {
-    // Crea un banner per informare l'utente dell'aggiornamento
+// Mostra banner per aggiornamento (esportato: usato anche dal check versione
+// del menu utente, oltre che dal flusso updatefound)
+export function showUpdateBanner() {
+    // Stesso pattern del banner offline: non duplicare se già visibile
+    if (document.getElementById('update-banner')) return;
+
     const banner = document.createElement('div');
     banner.id = 'update-banner';
     banner.className = 'fixed top-0 left-0 right-0 bg-blue-600 text-white text-center py-2 z-50';
@@ -241,79 +270,76 @@ export class PushNotificationManager {
 }
 
 // Gestione installazione PWA
+//
+// Il manager intercetta l'evento `beforeinstallprompt`, che i browser
+// Chromium (Chrome, Edge, Chrome per Android) emettono quando l'app
+// soddisfa i requisiti di installabilità: manifest valido con icone
+// 192px/512px, service worker registrato, pagina servita su HTTPS,
+// almeno una visita. L'evento viene salvato ed esposto ai componenti
+// UI (hook usePWAInstall) perché l'installazione parta su richiesta
+// dell'utente, non dal banner automatico del browser.
+//
+// Nota: iOS/Safari non emettono MAI beforeinstallprompt — per quel
+// caso il componente PWAInstallCard mostra le istruzioni manuali
+// "Aggiungi alla schermata Home".
 export class PWAInstallManager {
     constructor() {
         this.deferredPrompt = null;
+        this.listeners = new Set();
         this.setupInstallPrompt();
     }
 
     setupInstallPrompt() {
         window.addEventListener('beforeinstallprompt', (e) => {
-            console.log('📱 PWA installabile');
+            // Sopprimiamo il banner automatico del browser: il pulsante
+            // di installazione è già presente nella pagina di login.
             e.preventDefault();
             this.deferredPrompt = e;
-            this.showInstallButton();
+            this.emit();
         });
 
         window.addEventListener('appinstalled', () => {
             console.log('✅ PWA installata');
             this.deferredPrompt = null;
-            this.hideInstallButton();
+            this.emit();
         });
     }
 
-    // Mostra pulsante di installazione
-    showInstallButton() {
-        const installButton = document.getElementById('pwa-install-button');
-        if (installButton) {
-            installButton.style.display = 'block';
-            installButton.addEventListener('click', this.promptInstall.bind(this));
-        } else {
-            // Crea dinamicamente il pulsante se non esiste
-            this.createInstallButton();
-        }
+    // Il prompt nativo è disponibile (browser Chromium, requisiti
+    // soddisfatti, app non ancora installata)
+    canInstall() {
+        return this.deferredPrompt !== null;
     }
 
-    // Nascondi pulsante di installazione
-    hideInstallButton() {
-        const installButton = document.getElementById('pwa-install-button');
-        if (installButton) {
-            installButton.style.display = 'none';
-        }
-    }
-
-    // Crea pulsante di installazione
-    createInstallButton() {
-        const button = document.createElement('button');
-        button.id = 'pwa-install-button';
-        button.className = 'fixed bottom-4 right-4 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg shadow-lg z-50 flex items-center space-x-2';
-        button.innerHTML = `
-      <span>📱</span>
-      <span>Installa App</span>
-    `;
-
-        button.addEventListener('click', this.promptInstall.bind(this));
-        document.body.appendChild(button);
-    }
-
-    // Avvia installazione
-    async promptInstall() {
-        if (!this.deferredPrompt) {
-            console.log('⚠️ Prompt di installazione non disponibile');
-            return;
-        }
-
-        this.deferredPrompt.prompt();
-        const { outcome } = await this.deferredPrompt.userChoice;
-
-        console.log(`🎯 Risultato installazione: ${outcome}`);
-        this.deferredPrompt = null;
-    }
-
-    // Controlla se l'app è già installata
+    // L'app sta girando in modalità standalone (già installata)
     isInstalled() {
         return window.matchMedia('(display-mode: standalone)').matches ||
             window.navigator.standalone === true;
+    }
+
+    // Mostra il prompt nativo; restituisce la scelta del browser
+    // ('accepted', 'dismissed' o 'cancelled'), o null se non disponibile
+    async promptInstall() {
+        if (!this.deferredPrompt) {
+            return null;
+        }
+
+        const deferredPrompt = this.deferredPrompt;
+        this.deferredPrompt = null;
+
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        this.emit();
+        return outcome;
+    }
+
+    subscribe(listener) {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
+
+    emit() {
+        this.listeners.forEach((listener) => listener());
     }
 }
 

@@ -1,6 +1,14 @@
-const CACHE_NAME = 'sportclub-manager-v2';
+// v3: le icone PWA ora esistono (logo192/512, favicon, apple-touch-icon).
+// Il bump serve a far eliminare ai client che avevano precachiate le vecchie
+// richieste (che il catch-all rispondeva con index.html) le cache obsolete.
+const CACHE_NAME = 'sportclub-manager-v3';
 const urlsToCache = [
-    '/manifest.json'
+    '/manifest.json',
+    '/logo192.png',
+    '/logo512.png',
+    '/logo512-maskable.png',
+    '/apple-touch-icon.png',
+    '/favicon.ico'
 ];
 
 // Install event
@@ -19,7 +27,14 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((keys) =>
             Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-        ).then(() => self.clients.claim())
+        ).then(() => self.clients.claim()).then(() => {
+            // Comunica ai client la versione attiva (nome cache): la pagina
+            // la salva in localStorage per deduplicare le notifiche di
+            // "nuova versione"
+            return self.clients.matchAll().then((clients) => {
+                clients.forEach(client => client.postMessage({ type: 'sw-activated', version: CACHE_NAME }));
+            });
+        })
     );
 });
 

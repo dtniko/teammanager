@@ -40,7 +40,8 @@ router.get('/', requireRole(['admin', 'coach']), async (req, res) => {
         a.fiscal_code, a.email, a.phone, a.is_active,
         u.email as user_email,
         COUNT(DISTINCT ag.group_id) as groups_count,
-        STRING_AGG(DISTINCT g.name, ', ') as groups_names
+        STRING_AGG(DISTINCT g.name, ', ') as groups_names,
+        EXISTS (SELECT 1 FROM parent_athlete pa WHERE pa.athlete_id = a.id) AS has_parent
       FROM athletes a
       LEFT JOIN users u ON a.user_id = u.id
       LEFT JOIN athlete_group ag ON a.id = ag.athlete_id AND ag.is_active = true
@@ -261,17 +262,9 @@ router.put('/:athleteId', canAccessAthlete, async (req, res) => {
             address, residenceCity, phone, email, emergencyContactName, emergencyContactPhone
         } = req.body;
 
-        // Verifica permessi di modifica per i genitori
-        if (req.user.role === 'parent') {
-            const permissionResult = await client.query(
-                'SELECT can_edit FROM parent_athlete WHERE parent_id = $1 AND athlete_id = $2',
-                [req.user.id, athleteId]
-            );
-
-            if (permissionResult.rows.length === 0 || !permissionResult.rows[0].can_edit) {
-                return res.status(403).json({ error: 'Non hai i permessi per modificare questo atleta' });
-            }
-        }
+        // Per i genitori basta il collegamento parent_athlete:
+        // l'autorizzazione del figlio è gestita dall'admin, il middleware
+        // canAccessAthlete ha già verificato il collegamento.
 
         const updateResult = await client.query(`
       UPDATE athletes SET
@@ -310,10 +303,27 @@ router.put('/:athleteId', canAccessAthlete, async (req, res) => {
     }
 });
 
-// Disattiva un atleta
-router.delete('/:athleteId', requireRole(['admin']), async (req, res) => {
+// Verifica che il coach sia staff di almeno un gruppo dell'atleta
+const checkCoachGroupAccess = async (coachUserId, athleteId) => {
+    const result = await query(
+        `SELECT 1 FROM athlete_group ag
+         JOIN staff_group sg ON sg.group_id = ag.group_id
+         WHERE ag.athlete_id = $1 AND sg.user_id = $2
+         LIMIT 1`,
+        [athleteId, coachUserId]
+    );
+    return result.rows.length > 0;
+};
+
+// Disattiva un atleta (soft delete)
+router.delete('/:athleteId', requireRole(['admin', 'coach']), async (req, res) => {
     try {
         const { athleteId } = req.params;
+
+        // I coach possono disattivare solo gli atleti dei loro gruppi
+        if (req.user.role === 'coach' && !(await checkCoachGroupAccess(req.user.id, athleteId))) {
+            return res.status(403).json({ error: 'Non hai i permessi su questo atleta' });
+        }
 
         const result = await query(
             'UPDATE athletes SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING first_name, last_name',
@@ -334,6 +344,38 @@ router.delete('/:athleteId', requireRole(['admin']), async (req, res) => {
     } catch (error) {
         console.error('Errore nella disattivazione dell\'atleta:', error);
         res.status(500).json({ error: 'Errore nella disattivazione dell\'atleta' });
+    }
+});
+
+// Riattiva un atleta
+router.post('/:athleteId/reactivate', requireRole(['admin', 'coach']), async (req, res) => {
+    try {
+        const { athleteId } = req.params;
+
+        // I coach possono riattivare solo gli atleti dei loro gruppi
+        if (req.user.role === 'coach' && !(await checkCoachGroupAccess(req.user.id, athleteId))) {
+            return res.status(403).json({ error: 'Non hai i permessi su questo atleta' });
+        }
+
+        const result = await query(
+            'UPDATE athletes SET is_active = true, updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING first_name, last_name',
+            [athleteId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Atleta non trovato' });
+        }
+
+        console.log(`✅ Atleta riattivato: ${result.rows[0].first_name} ${result.rows[0].last_name}`);
+
+        res.json({
+            success: true,
+            message: 'Atleta riattivato con successo'
+        });
+
+    } catch (error) {
+        console.error('Errore nella riattivazione dell\'atleta:', error);
+        res.status(500).json({ error: 'Errore nella riattivazione dell\'atleta' });
     }
 });
 
@@ -418,14 +460,15 @@ router.put('/:athleteId/self', authenticateToken, async (req, res) => {
             address, residenceCity, phone, email, emergencyContactName, emergencyContactPhone
         } = req.body;
 
-        // Verifica permessi di modifica solo per i genitori
+        // Verifica il collegamento solo per i genitori (l'autorizzazione del
+        // figlio è gestita dall'admin: basta che il link esista)
         if (req.user.role === 'parent') {
             const permissionResult = await client.query(
-                'SELECT can_edit FROM parent_athlete WHERE parent_id = $1 AND athlete_id = $2',
+                'SELECT id FROM parent_athlete WHERE parent_id = $1 AND athlete_id = $2',
                 [req.user.id, athleteId]
             );
 
-            if (permissionResult.rows.length === 0 || !permissionResult.rows[0].can_edit) {
+            if (permissionResult.rows.length === 0) {
                 await client.query('ROLLBACK');
                 return res.status(403).json({ error: 'Non hai i permessi per modificare questo atleta' });
             }

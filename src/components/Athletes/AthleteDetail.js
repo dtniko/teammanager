@@ -17,6 +17,7 @@ import {
     Download,
     Eye,
     Trash2,
+    RotateCcw,
     Plus,
     UserCheck,
     UserX
@@ -247,12 +248,39 @@ const AthleteDetail = () => {
         }
     };
 
+    const handleDeactivateAthlete = async () => {
+        if (!window.confirm(
+            `Disattivare ${athlete.first_name} ${athlete.last_name}? L'atleta verrà nascosto dalle liste ma la storia resterà salvata. Potrà essere riattivato in seguito.`
+        )) {
+            return;
+        }
+
+        try {
+            await apiService.deleteAthlete(athleteId);
+            toast.success('Atleta disattivato');
+            navigate('/athletes');
+        } catch (error) {
+            console.error('Errore nella disattivazione dell\'atleta:', error);
+            toast.error(error?.response?.data?.error || 'Errore nella disattivazione dell\'atleta');
+        }
+    };
+
+    const handleReactivateAthlete = async () => {
+        try {
+            await apiService.reactivateAthlete(athleteId);
+            toast.success('Atleta riattivato');
+            loadAthleteData();
+        } catch (error) {
+            console.error('Errore nella riattivazione dell\'atleta:', error);
+            toast.error(error?.response?.data?.error || 'Errore nella riattivazione dell\'atleta');
+        }
+    };
+
     const canEdit = () => {
         if (user.role === 'admin' || user.role === 'coach') return true;
         if (user.role === 'parent') {
-            return athlete?.parents?.some(parent =>
-                parent.id === user.id && parent.can_edit
-            );
+            // Il collegamento genitore-atleta è già autorizzato da un admin
+            return athlete?.parents?.some(parent => parent.id === user.id);
         }
         if (user.role === 'athlete') {
             return athlete?.has_account && athlete?.user_id === user.id;
@@ -330,6 +358,25 @@ const AthleteDetail = () => {
                         >
                             <Edit className="h-5 w-5" />
                         </Link>
+                    )}
+                    {canEdit() && (
+                        athlete.is_active ? (
+                            <button
+                                onClick={handleDeactivateAthlete}
+                                className="text-gray-400 hover:text-red-600"
+                                title="Disattiva"
+                            >
+                                <Trash2 className="h-5 w-5" />
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleReactivateAthlete}
+                                className="text-gray-400 hover:text-green-600"
+                                title="Riattiva"
+                            >
+                                <RotateCcw className="h-5 w-5" />
+                            </button>
+                        )
                     )}
                 </div>
                 <p className="text-gray-600">
@@ -483,7 +530,7 @@ const AthleteDetail = () => {
                         </div>
 
                         {/* Parents */}
-                        {athlete.parents && athlete.parents.length > 0 && (
+                        {athlete.parents && athlete.parents.length > 0 ? (
                             <div className="bg-white shadow rounded-lg p-6">
                                 <h3 className="text-lg font-medium text-gray-900 mb-4">Genitori/Tutori</h3>
                                 <div className="space-y-3">
@@ -501,6 +548,11 @@ const AthleteDetail = () => {
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        ) : (
+                            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center">
+                                <AlertTriangle className="h-5 w-5 text-amber-600 mr-3 flex-shrink-0" />
+                                <p className="text-sm text-amber-800">Nessun genitore associato a questo atleta</p>
                             </div>
                         )}
 

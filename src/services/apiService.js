@@ -144,6 +144,10 @@ class ApiService {
         return this.client.delete(`/athletes/${athleteId}`);
     }
 
+    async reactivateAthlete(athleteId) {
+        return this.client.post(`/athletes/${athleteId}/reactivate`);
+    }
+
     async updateParentAthlete(athleteId, data) {
         return this.client.put(`/athletes/${athleteId}/self`, data);
     }
@@ -385,12 +389,24 @@ class ApiService {
         return this.client.post('/notifications/system', notificationData);
     }
 
+    async sendGroupPushNotification(notificationData) {
+        return this.client.post('/notifications/group', notificationData);
+    }
+
     async savePushSubscription(subscription) {
         return this.client.post('/notifications/push-subscribe', subscription.toJSON());
     }
 
     async deletePushSubscription(endpoint) {
         return this.client.delete('/notifications/push-subscribe', { data: { endpoint } });
+    }
+
+    async getPushStatus() {
+        return this.client.get('/notifications/push-status');
+    }
+
+    async testPush() {
+        return this.client.post('/notifications/test-push');
     }
 
     // === UTILITY METHODS ===
@@ -438,6 +454,11 @@ class ApiService {
     // Controllo salute API
     async healthCheck() {
         return this.client.get('/health');
+    }
+
+    // Versione del deployment corrente
+    async version() {
+        return this.client.get('/version');
     }
 
     // === HELPER METHODS ===

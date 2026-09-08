@@ -58,6 +58,14 @@ const AttendanceReport = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loadSummary]);
 
+    // Ordina per atleta più assente: totale assenze (avvisate + no-show) decrescente
+    const sortedSummary = [...summary].sort((a, b) => {
+        const absA = (a.notified_absences || 0) + (a.unnotified_absences || 0);
+        const absB = (b.notified_absences || 0) + (b.unnotified_absences || 0);
+        if (absB !== absA) return absB - absA;
+        return `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`);
+    });
+
     if (!canView) {
         return (
             <div className="text-center py-12">
@@ -75,7 +83,7 @@ const AttendanceReport = () => {
             {/* Header */}
             <div>
                 <h1 className="text-2xl font-bold text-gray-900">Report Presenze</h1>
-                <p className="text-gray-600 mt-1">Confronto tra convocazioni e presenze reali confermate</p>
+                <p className="text-gray-600 mt-1">Confronto tra convocazioni e presenze reali confermate — ordinato per atleta più assente</p>
             </div>
 
             {/* Filters */}
@@ -127,16 +135,29 @@ const AttendanceReport = () => {
                 </div>
             ) : (
                 <div className="space-y-3">
-                    {summary.map(row => (
+                    {sortedSummary.map(row => {
+                        const totalAbsences = (row.notified_absences || 0) + (row.unnotified_absences || 0);
+                        return (
                         <div key={row.athlete_id} className="bg-white shadow rounded-lg p-4">
-                            <div className="flex items-center">
-                                <UserCircle className="h-8 w-8 text-gray-300 flex-shrink-0" />
-                                <p className="ml-2 text-sm font-medium text-gray-900">
-                                    {row.first_name} {row.last_name}
-                                </p>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center">
+                                    <UserCircle className="h-8 w-8 text-gray-300 flex-shrink-0" />
+                                    <p className="ml-2 text-sm font-medium text-gray-900">
+                                        {row.first_name} {row.last_name}
+                                    </p>
+                                </div>
+                                {totalAbsences > 0 && (
+                                    <span className="text-xs font-semibold text-red-600 bg-red-50 rounded-full px-2 py-1">
+                                        {totalAbsences} {totalAbsences === 1 ? 'assenza' : 'assenze'}
+                                    </span>
+                                )}
                             </div>
 
-                            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                            <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+                                <div className="bg-red-100 rounded-md py-2">
+                                    <p className="text-lg font-semibold text-red-800">{totalAbsences}</p>
+                                    <p className="text-xs text-red-700">Assenze totali</p>
+                                </div>
                                 <div className="bg-gray-50 rounded-md py-2">
                                     <p className="text-lg font-semibold text-gray-700">{row.notified_absences}</p>
                                     <p className="text-xs text-gray-500">Assenze avvisate</p>
@@ -155,7 +176,8 @@ const AttendanceReport = () => {
                                 {row.total_events} eventi totali
                             </p>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>

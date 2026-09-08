@@ -4,6 +4,23 @@ import apiService from '../services/apiService';
 import { useAuth } from './AuthContext';
 import { supabase } from '../services/supabaseClient';
 
+// Chiave pubblica VAPID letta dal server a runtime: è per forza quella
+// accoppiata alla chiave privata con cui il server firma le push.
+// Il fallback è quella baked a build-time (REACT_APP_VAPID_PUBLIC_KEY),
+// corretta in locale e, dal fix del deploy, anche in produzione.
+let cachedVapidPublicKey = null;
+const getVapidPublicKey = async () => {
+    if (cachedVapidPublicKey) return cachedVapidPublicKey;
+    try {
+        const status = await apiService.getPushStatus();
+        if (status && status.publicKey) {
+            cachedVapidPublicKey = status.publicKey;
+            return cachedVapidPublicKey;
+        }
+    } catch { /* offline/401: si usa il fallback baked */ }
+    return process.env.REACT_APP_VAPID_PUBLIC_KEY || null;
+};
+
 const NotificationContext = createContext();
 
 export const useNotifications = () => {
@@ -87,7 +104,7 @@ export const NotificationProvider = ({ children }) => {
         };
     }, [isAuthenticated, user?.id]);
 
-    // Setup push notifications
+    // Setup push notifications (auto al login)
     const setupPushNotifications = async () => {
         if ('serviceWorker' in navigator && 'PushManager' in window) {
             try {
@@ -97,7 +114,15 @@ export const NotificationProvider = ({ children }) => {
                 const subscription = await registration.pushManager.getSubscription();
 
                 if (subscription) {
-                    setPushSubscription(subscription);
+                    if (typeof Notification === 'undefined' || Notification.permission === 'granted') {
+                        // Self-healing: rigenera la subscription con la chiave
+                        // pubblica corrente del server (idempotente se la chiave
+                        // non è cambiata; ne crea una nuova e rimuove l'endpoint
+                        // vecchio se il server firma con una chiave diversa).
+                        await ensurePushSubscription();
+                    } else {
+                        setPushSubscription(subscription);
+                    }
                 } else {
                     // Richiedi permesso per le notifiche
                     await requestNotificationPermission();
@@ -106,6 +131,57 @@ export const NotificationProvider = ({ children }) => {
                 console.error('Errore nel setup delle push notifications:', error);
             }
         }
+    };
+
+    // Crea (o rigenera, self-healing) la subscription con la chiave pubblica
+    // corrente del server e la registra. `subscribe()` è idempotente se la
+    // chiave coincide con quella della subscription esistente e ne crea una
+    // nuova corretta se la chiave con cui il server firma è cambiata.
+    const ensurePushSubscription = async () => {
+        if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null;
+        const vapidPublicKey = await getVapidPublicKey();
+        if (!vapidPublicKey) {
+            console.warn('Chiave VAPID non disponibile: push non sottoscritte');
+            return null;
+        }
+        const registration = await navigator.serviceWorker.ready;
+        const previous = await registration.pushManager.getSubscription();
+        const storedKey = localStorage.getItem('vapid_server_key');
+        if (previous && storedKey !== vapidPublicKey) {
+            // La subscription nel browser è stata creata con una chiave server
+            // diversa (o non è mai stata registrata): la rimuoviamo per
+            // liberare lo slot di quota prima di ricrearla.
+            try { await previous.unsubscribe(); } catch {}
+        }
+        let subscription;
+        try {
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+            });
+        } catch (err) {
+            if (err.name === 'QuotaExceededError' && previous) {
+                // Quota browser esaurita da subscription vecchie: disiscrivo
+                // quella corrente e riprovo.
+                try { await previous.unsubscribe(); } catch {}
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+                });
+            } else {
+                throw err;
+            }
+        }
+        setPushSubscription(subscription);
+        // Registra la (nuova) subscription; se quella precedente aveva un
+        // endpoint diverso, toglila dal server per non lasciare endpoint morti.
+        await apiService.savePushSubscription(subscription);
+        try { localStorage.setItem('vapid_server_key', vapidPublicKey); } catch {}
+        if (previous && previous.endpoint !== subscription.endpoint) {
+            try { await apiService.deletePushSubscription(previous.endpoint); } catch {}
+        }
+        return subscription;
     };
 
     // Richiedi permesso per notifiche push
@@ -126,29 +202,42 @@ export const NotificationProvider = ({ children }) => {
     // Sottoscrivi alle push notifications
     const subscribeToPushNotifications = async () => {
         try {
-            const registration = await navigator.serviceWorker.ready;
-
-            // Qui dovresti usare le tue chiavi VAPID
-            const vapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY;
-
-            if (!vapidPublicKey) {
-                console.warn('Chiave VAPID non configurata');
-                return;
-            }
-
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-            });
-
-            setPushSubscription(subscription);
-
-            // Invia la sottoscrizione al server
-            await apiService.savePushSubscription(subscription);
-
+            await ensurePushSubscription();
             console.log('Push notifications attivate');
         } catch (error) {
             console.error('Errore nella sottoscrizione push:', error);
+        }
+    };
+
+    // Attivazione esplicita delle push notifiche (azione utente dal menu):
+    // a differenza dell'auto-setup ritorna l'esito per il feedback all'utente
+    const activatePushNotifications = async () => {
+        if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+            return 'unsupported';
+        }
+
+        let permission = Notification.permission;
+
+        if (permission === 'denied') {
+            return 'denied';
+        }
+
+        if (permission === 'default') {
+            permission = await Notification.requestPermission();
+            if (permission !== 'granted') {
+                return permission; // 'denied' | 'default'
+            }
+        }
+
+        try {
+            // Self-healing: rigenera la subscription con la chiave corrente
+            // del server; `null` qui significa chiave VAPID assente.
+            const subscription = await ensurePushSubscription();
+
+            return subscription ? 'ok' : 'no-vapid';
+        } catch (error) {
+            console.error('Errore nell\'attivazione delle push notifications:', error);
+            return 'error';
         }
     };
 
@@ -344,6 +433,7 @@ export const NotificationProvider = ({ children }) => {
         deleteReadNotifications,
         addNotification,
         requestNotificationPermission,
+        activatePushNotifications,
 
         // Getters
         getNotificationsByType,
