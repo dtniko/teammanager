@@ -255,10 +255,10 @@ router.get('/reports/attendance-summary', requireRole(['admin', 'coach']), async
         const summaryResult = await query(`
       SELECT
         athlete.id as athlete_id, athlete.first_name, athlete.last_name,
-        COUNT(*) FILTER (WHERE a.status = 'absent') as notified_absences,
-        COUNT(*) FILTER (WHERE a.actual_status = 'absent' AND a.status IN ('present', 'called_up', 'pending')) as unnotified_absences,
-        COUNT(*) FILTER (WHERE a.actual_status = 'present') as confirmed_present,
-        COUNT(DISTINCT a.event_id) as total_events
+        COUNT(*) FILTER (WHERE a.status = 'absent')::int as notified_absences,
+        COUNT(*) FILTER (WHERE a.actual_status = 'absent' AND a.status IN ('present', 'called_up', 'pending'))::int as unnotified_absences,
+        COUNT(*) FILTER (WHERE a.actual_status = 'present')::int as confirmed_present,
+        COUNT(DISTINCT a.event_id)::int as total_events
       FROM athletes athlete
       JOIN athlete_group ag ON ag.athlete_id = athlete.id AND ag.is_active = true
       JOIN attendance a ON a.athlete_id = athlete.id

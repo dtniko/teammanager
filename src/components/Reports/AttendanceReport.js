@@ -60,8 +60,8 @@ const AttendanceReport = () => {
 
     // Ordina per atleta più assente: totale assenze (avvisate + no-show) decrescente
     const sortedSummary = [...summary].sort((a, b) => {
-        const absA = (a.notified_absences || 0) + (a.unnotified_absences || 0);
-        const absB = (b.notified_absences || 0) + (b.unnotified_absences || 0);
+        const absA = Number(a.notified_absences || 0) + Number(a.unnotified_absences || 0);
+        const absB = Number(b.notified_absences || 0) + Number(b.unnotified_absences || 0);
         if (absB !== absA) return absB - absA;
         return `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`);
     });
@@ -136,7 +136,7 @@ const AttendanceReport = () => {
             ) : (
                 <div className="space-y-3">
                     {sortedSummary.map(row => {
-                        const totalAbsences = (row.notified_absences || 0) + (row.unnotified_absences || 0);
+                        const totalAbsences = Number(row.notified_absences || 0) + Number(row.unnotified_absences || 0);
                         return (
                         <div key={row.athlete_id} className="bg-white shadow rounded-lg p-4">
                             <div className="flex items-center justify-between">
